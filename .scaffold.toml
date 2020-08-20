@@ -1,0 +1,23 @@
+# Exclude path
+exclude = [
+    "./target"
+]
+
+[template]
+name = "test"
+author = "Benjamin Coenen <5719034+bnjjj@users.noreply.github.com>"
+version = "0.1.0"
+
+[parameters]
+# Name is forbidden
+    [parameters.feature]
+    type = "string"
+    message = "What is the name of your feature ?"
+    required = true
+    [parameters.description]
+    type = "string"
+    message = "What is the description of your feature ?"
+    default = "Here is my default description"
+    [parameters.show_description]
+    type = "boolean"
+    message = "Do you want to display description ?"

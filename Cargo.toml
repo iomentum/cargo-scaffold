@@ -1,0 +1,23 @@
+[package]
+name = "cargo-scaffold"
+version = "0.1.0"
+authors = ["Benjamin Coenen <5719034+bnjjj@users.noreply.github.com>"]
+edition = "2018"
+description = "{{description}}"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cargo = "0.46.1"
+anyhow = "1.0.32"
+clap = "2.33.3" 
+serde = { version = "1.0.115", features = ["derive"] }
+dialoguer = "0.6.2"
+handlebars = "3.4.0"
+walkdir = "2.3.1"
+toml = "0.5.6"
+heck = "0.3.1"
+
+[[bin]]
+path = "src/main.rs"
+name = "cargo-scaffold"
