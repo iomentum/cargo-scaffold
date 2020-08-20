@@ -1,6 +1,6 @@
 use anyhow::Result;
-use cargo_scaffold::init;
+use cargo_scaffold::cli_init;
 
 fn main() -> Result<()> {
-    init()
+    cli_init()
 }

@@ -1,3 +1,7 @@
+mod git;
+
+use crate::git::clone;
+
 use std::fs::{self, File};
 use std::io::Read;
 use std::string::ToString;
@@ -5,14 +9,15 @@ use std::{collections::BTreeMap, env, path::PathBuf};
 
 use anyhow::{anyhow, Result};
 use clap::{App, Arg, ArgMatches};
-use dialoguer::{Confirm, Input};
+use dialoguer::{Confirm, Input, MultiSelect, Select};
+use git2::Repository;
 use handlebars::Handlebars;
 use heck::KebabCase;
 use serde::{Deserialize, Serialize};
 use toml::Value;
 use walkdir::WalkDir;
 
-pub fn init() -> Result<()> {
+pub fn cli_init() -> Result<()> {
     let matches = App::new("cargo")
         .subcommand(
             App::new("scaffold")
@@ -21,11 +26,21 @@ pub fn init() -> Result<()> {
                     Arg::with_name("template")
                         .help("specifiy your template location")
                         .required(true),
+                    Arg::with_name("force")
+                        .short("f")
+                        .long("force")
+                        .help("override target directory if it exists")
+                        .takes_value(false),
                     Arg::with_name("target-directory")
                         .short("t")
                         .long("target-directory")
                         .help("specifiy the target directory")
                         .takes_value(true),
+                    Arg::with_name("passphrase")
+                        .short("p")
+                        .long("passphrase")
+                        .help("specify if your ssh key is protected by a passphrase")
+                        .takes_value(false),
                 ]),
         )
         .get_matches();
@@ -44,6 +59,8 @@ struct ScaffoldDescription {
     target_dir: Option<PathBuf>,
     #[serde(skip)]
     template_path: PathBuf,
+    #[serde(skip)]
+    force: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -53,6 +70,7 @@ struct Parameter {
     required: bool,
     r#type: ParameterType,
     default: Option<Value>,
+    values: Option<Vec<Value>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -62,20 +80,32 @@ enum ParameterType {
     Integer,
     Float,
     Boolean,
+    Select,
+    MultiSelect,
 }
 
 impl ScaffoldDescription {
     pub fn new(matches: &ArgMatches) -> Result<Self> {
-        let template_path = matches.value_of("template").unwrap();
+        let mut template_path = matches.value_of("template").unwrap().to_string();
         let mut scaffold_desc: ScaffoldDescription = {
+            if template_path.ends_with(".git") {
+                let tmp_dir = env::temp_dir().join(format!("{:x}", md5::compute(&template_path)));
+                if tmp_dir.exists() {
+                    fs::remove_dir_all(&tmp_dir)?;
+                }
+                fs::create_dir_all(&tmp_dir)?;
+                clone(&template_path, &tmp_dir, matches.is_present("passphrase"))?;
+                template_path = tmp_dir.to_string_lossy().to_string();
+            }
             let mut scaffold_file =
-                File::open(PathBuf::from(template_path).join(".scaffold.toml"))?;
+                File::open(PathBuf::from(&template_path).join(".scaffold.toml"))?;
             let mut scaffold_desc_str = String::new();
             scaffold_file.read_to_string(&mut scaffold_desc_str)?;
             toml::from_str(&scaffold_desc_str)?
         };
 
         scaffold_desc.target_dir = matches.value_of("target-directory").map(PathBuf::from);
+        scaffold_desc.force = matches.is_present("force");
         scaffold_desc.template_path = PathBuf::from(template_path);
 
         Ok(scaffold_desc)
@@ -91,24 +121,25 @@ impl ScaffoldDescription {
 
         // TODO: add force flag
         if dir_path.exists() {
-            Err(anyhow!(
-                "cannot create {} because it already exists",
-                dir_path.to_string_lossy()
-            ))
-        } else {
-            fs::create_dir(&dir_path)?;
-            Ok(dir_path)
+            if !self.force {
+                return Err(anyhow!(
+                    "cannot create {} because it already exists",
+                    dir_path.to_string_lossy()
+                ));
+            } else {
+                fs::remove_dir_all(&dir_path)?;
+            }
         }
+
+        fs::create_dir_all(&dir_path)?;
+        let path = fs::canonicalize(dir_path)?;
+
+        Ok(path)
     }
 
-    fn scaffold(&self) -> Result<()> {
-        let excludes = self.exclude.clone().unwrap_or_default();
-
-        let name: String = Input::new()
-            .with_prompt("What is the name of your generated project ?")
-            .interact()?;
-
+    fn fetch_parameters_value(&self) -> Result<BTreeMap<String, Value>> {
         let mut parameters: BTreeMap<String, Value> = BTreeMap::new();
+
         if let Some(parameter_list) = self.parameters.clone() {
             for (parameter_name, parameter) in parameter_list {
                 let value: Value = match parameter.r#type {
@@ -128,13 +159,69 @@ impl ScaffoldDescription {
                     ParameterType::Boolean => {
                         Value::Boolean(Confirm::new().with_prompt(parameter.message).interact()?)
                     }
+                    ParameterType::Select => {
+                        let idx_selected = Select::new()
+                            .items(
+                                parameter
+                                    .values
+                                    .as_ref()
+                                    .expect("cannot make a select parameter with empty values"),
+                            )
+                            .with_prompt(parameter.message)
+                            .interact()?;
+                        parameter
+                            .values
+                            .as_ref()
+                            .expect("cannot make a select parameter with empty values")
+                            .get(idx_selected)
+                            .unwrap()
+                            .clone()
+                    }
+                    ParameterType::MultiSelect => {
+                        let idxs_selected = MultiSelect::new()
+                            .items(
+                                parameter
+                                    .values
+                                    .as_ref()
+                                    .expect("cannot make a select parameter with empty values"),
+                            )
+                            .with_prompt(parameter.message.clone())
+                            .interact()?;
+                        let values = idxs_selected
+                            .into_iter()
+                            .map(|idx| {
+                                parameter
+                                    .values
+                                    .as_ref()
+                                    .expect("cannot make a select parameter with empty values")
+                                    .get(idx)
+                                    .unwrap()
+                                    .clone()
+                            })
+                            .collect();
+
+                        Value::Array(values)
+                    }
                 };
                 parameters.insert(parameter_name, value);
             }
         }
 
-        let dir_path = self.create_dir(&name)?;
+        Ok(parameters)
+    }
 
+    fn scaffold(&self) -> Result<()> {
+        let excludes = self.exclude.clone().unwrap_or_default();
+
+        let name: String = Input::new()
+            .with_prompt("What is the name of your generated project ?")
+            .interact()?;
+
+        let mut parameters: BTreeMap<String, Value> = self.fetch_parameters_value()?;
+        let dir_path = self.create_dir(&name)?;
+        parameters.insert("name".to_string(), Value::String(name));
+
+        // List entries inside directory
         let entries = WalkDir::new(&self.template_path)
             .into_iter()
             .filter_entry(|entry| {
@@ -167,7 +254,8 @@ impl ScaffoldDescription {
 
         for entry in entries {
             let entry = entry.map_err(|e| anyhow!("cannot read entry : {}", e))?;
-            if excludes.contains(&entry.path().to_string_lossy().to_string()) {
+            let entry_path = entry.path().strip_prefix(&self.template_path)?;
+            if entry_path == PathBuf::from("") {
                 continue;
             }
             // TODO: check to ignore .git dir
@@ -175,7 +263,7 @@ impl ScaffoldDescription {
                 if entry.path().to_str() == Some(".") {
                     continue;
                 }
-                fs::create_dir(dir_path.join(entry.path()))
+                fs::create_dir(dir_path.join(entry_path))
                     .map_err(|e| anyhow!("cannot create dir : {}", e))?;
                 continue;
             }
@@ -193,7 +281,7 @@ impl ScaffoldDescription {
                 .render_template(&content, &parameters)
                 .map_err(|e| anyhow!("cannot render template : {}", e))?;
 
-            fs::write(dir_path.join(filename), rendered_content)
+            fs::write(dir_path.join(entry_path), rendered_content)
                 .map_err(|e| anyhow!("cannot create file : {}", e))?;
         }
 

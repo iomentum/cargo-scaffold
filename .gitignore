@@ -1,3 +1,2 @@
 /target
 Cargo.lock
-{{#if show_description}} {{description}} {{/if}}

@@ -9,11 +9,15 @@ author = "Benjamin Coenen <5719034+bnjjj@users.noreply.github.com>"
 version = "0.1.0"
 
 [parameters]
-# Name is forbidden
+    # parameters.name is forbidden
     [parameters.feature]
     type = "string"
     message = "What is the name of your feature ?"
     required = true
+    [parameters.gender]
+    type = "select"
+    message = "What is the name of your gender ?"
+    values = ["male", "female", "other"]
     [parameters.description]
     type = "string"
     message = "What is the description of your feature ?"
