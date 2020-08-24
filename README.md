@@ -1,6 +1,6 @@
 # Cargo-scaffold
 
-`cargo-scaffold` is flexible and easy developer tool to let you scaffold a project. It's fully configurable without writing any line of codes and generate any kind of projects with a developer friendly CLI.
+`cargo-scaffold` is flexible and easy developer tool to let you scaffold a project. It's fully configurable without writing any line of codes. It generates any kind of projects with a developer friendly CLI.
 
 // Gif shell
 
