@@ -24,22 +24,22 @@ pub fn cli_init() -> Result<()> {
                 .about("Scaffold a new project from a template")
                 .args(&[
                     Arg::with_name("template")
-                        .help("specifiy your template location")
+                        .help("Specifiy your template location")
                         .required(true),
                     Arg::with_name("force")
                         .short("f")
                         .long("force")
-                        .help("override target directory if it exists")
+                        .help("Override target directory if it exists")
                         .takes_value(false),
                     Arg::with_name("target-directory")
                         .short("t")
                         .long("target-directory")
-                        .help("specifiy the target directory")
+                        .help("Specifiy the target directory")
                         .takes_value(true),
                     Arg::with_name("passphrase")
                         .short("p")
                         .long("passphrase")
-                        .help("specify if your ssh key is protected by a passphrase")
+                        .help("Specify if your ssh key is protected by a passphrase")
                         .takes_value(false),
                 ]),
         )
