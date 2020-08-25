@@ -1,12 +1,17 @@
-# Exclude path
-exclude = [
-    "./target"
-]
 
 [template]
 name = "test"
 author = "Benjamin Coenen <5719034+bnjjj@users.noreply.github.com>"
 version = "0.1.0"
+# Exclude path
+exclude = [
+    "./target"
+]
+# Notes to display at the end of the generation
+notes = """
+Have fun using this template called {{name}} ! Here is the description: {{description}} 
+"""
+
 
 [parameters]
     # parameters.name is forbidden

@@ -21,6 +21,7 @@ toml = "0.5.6"
 heck = "0.3.1"
 git2 = "0.13.9"
 md5 = "0.7.0"
+handlebars_misc_helpers = "0.9.1"
 
 [[bin]]
 path = "src/main.rs"

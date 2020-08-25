@@ -2,15 +2,18 @@ mod git;
 
 use crate::git::clone;
 
-use std::fs::{self, File};
-use std::io::Read;
-use std::string::ToString;
-use std::{collections::BTreeMap, env, path::PathBuf};
+use std::{
+    collections::BTreeMap,
+    env,
+    fs::{self, File},
+    io::Read,
+    path::PathBuf,
+    string::ToString,
+};
 
 use anyhow::{anyhow, Result};
 use clap::{App, Arg, ArgMatches};
 use dialoguer::{Confirm, Input, MultiSelect, Select};
-use git2::Repository;
 use handlebars::Handlebars;
 use heck::KebabCase;
 use serde::{Deserialize, Serialize};
@@ -26,13 +29,18 @@ pub fn cli_init() -> Result<()> {
                     Arg::with_name("template")
                         .help("Specifiy your template location")
                         .required(true),
+                    Arg::with_name("name")
+                        .short("n")
+                        .long("name")
+                        .help("Specify the name of your generated project (and so skip the prompt asking for it)")
+                        .takes_value(true),
                     Arg::with_name("force")
                         .short("f")
                         .long("force")
                         .help("Override target directory if it exists")
                         .takes_value(false),
                     Arg::with_name("target-directory")
-                        .short("t")
+                        .short("d")
                         .long("target-directory")
                         .help("Specifiy the target directory")
                         .takes_value(true),
@@ -46,25 +54,33 @@ pub fn cli_init() -> Result<()> {
         .get_matches();
 
     match matches.subcommand() {
-        ("scaffold", Some(subcmd)) => ScaffoldDescription::new(subcmd)?.scaffold(),
+        ("scaffold", Some(subcmd)) => ScaffoldDescription::from_cli(subcmd)?.scaffold(),
         _ => Err(anyhow!("cannot fin corresponding command")),
     }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-struct ScaffoldDescription {
+pub struct ScaffoldDescription {
+    template: TemplateDescription,
     parameters: Option<BTreeMap<String, Parameter>>,
-    exclude: Option<Vec<String>>,
     #[serde(skip)]
     target_dir: Option<PathBuf>,
     #[serde(skip)]
     template_path: PathBuf,
     #[serde(skip)]
     force: bool,
+    #[serde(skip)]
+    project_name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-struct Parameter {
+pub struct TemplateDescription {
+    exclude: Option<Vec<String>>,
+    notes: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Parameter {
     message: String,
     #[serde(default)]
     required: bool,
@@ -75,7 +91,7 @@ struct Parameter {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
-enum ParameterType {
+pub enum ParameterType {
     String,
     Integer,
     Float,
@@ -84,8 +100,16 @@ enum ParameterType {
     MultiSelect,
 }
 
+pub struct Opts {
+    pub template_path: PathBuf,
+    pub project_name: Option<String>,
+    pub target_dir: Option<PathBuf>,
+    pub force: bool,
+    pub passphrase_needed: bool,
+}
+
 impl ScaffoldDescription {
-    pub fn new(matches: &ArgMatches) -> Result<Self> {
+    pub fn from_cli(matches: &ArgMatches) -> Result<Self> {
         let mut template_path = matches.value_of("template").unwrap().to_string();
         let mut scaffold_desc: ScaffoldDescription = {
             if template_path.ends_with(".git") {
@@ -107,6 +131,34 @@ impl ScaffoldDescription {
         scaffold_desc.target_dir = matches.value_of("target-directory").map(PathBuf::from);
         scaffold_desc.force = matches.is_present("force");
         scaffold_desc.template_path = PathBuf::from(template_path);
+        scaffold_desc.project_name = matches.value_of("name").map(String::from);
+
+        Ok(scaffold_desc)
+    }
+
+    pub fn new(opts: Opts) -> Result<Self> {
+        let mut template_path = opts.template_path.to_string_lossy().to_string();
+        let mut scaffold_desc: ScaffoldDescription = {
+            if template_path.ends_with(".git") {
+                let tmp_dir = env::temp_dir().join(format!("{:x}", md5::compute(&template_path)));
+                if tmp_dir.exists() {
+                    fs::remove_dir_all(&tmp_dir)?;
+                }
+                fs::create_dir_all(&tmp_dir)?;
+                clone(&template_path, &tmp_dir, opts.passphrase_needed)?;
+                template_path = tmp_dir.to_string_lossy().to_string();
+            }
+            let mut scaffold_file =
+                File::open(PathBuf::from(&template_path).join(".scaffold.toml"))?;
+            let mut scaffold_desc_str = String::new();
+            scaffold_file.read_to_string(&mut scaffold_desc_str)?;
+            toml::from_str(&scaffold_desc_str)?
+        };
+
+        scaffold_desc.target_dir = opts.target_dir;
+        scaffold_desc.force = opts.force;
+        scaffold_desc.template_path = opts.template_path;
+        scaffold_desc.project_name = opts.project_name;
 
         Ok(scaffold_desc)
     }
@@ -119,7 +171,6 @@ impl ScaffoldDescription {
             .unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| ".".into()))
             .join(&dir_name);
 
-        // TODO: add force flag
         if dir_path.exists() {
             if !self.force {
                 return Err(anyhow!(
@@ -168,6 +219,7 @@ impl ScaffoldDescription {
                                     .expect("cannot make a select parameter with empty values"),
                             )
                             .with_prompt(parameter.message)
+                            .default(0)
                             .interact()?;
                         parameter
                             .values
@@ -210,17 +262,23 @@ impl ScaffoldDescription {
         Ok(parameters)
     }
 
-    fn scaffold(&self) -> Result<()> {
-        let excludes = self.exclude.clone().unwrap_or_default();
-
-        let name: String = Input::new()
-            .with_prompt("What is the name of your generated project ?")
-            .interact()?;
+    pub fn scaffold(&self) -> Result<()> {
+        let excludes = self.template.exclude.clone().unwrap_or_default();
 
         let mut parameters: BTreeMap<String, Value> = self.fetch_parameters_value()?;
+        let name: String = match &self.project_name {
+            Some(project_name) => project_name.clone(),
+            None => Input::new()
+                .with_prompt("What is the name of your generated project ?")
+                .interact()?,
+        };
         let dir_path = self.create_dir(&name)?;
-        parameters.insert("name".to_string(), Value::String(name));
+        parameters.insert(
+            "target_dir".to_string(),
+            Value::String(dir_path.to_str().unwrap_or_default().to_string()),
+        );
 
+        parameters.insert("name".to_string(), Value::String(name));
         // List entries inside directory
         let entries = WalkDir::new(&self.template_path)
             .into_iter()
@@ -252,6 +310,8 @@ impl ScaffoldDescription {
                 true
             });
 
+        let mut template_engine = Handlebars::new();
+        handlebars_misc_helpers::setup_handlebars(&mut template_engine);
         for entry in entries {
             let entry = entry.map_err(|e| anyhow!("cannot read entry : {}", e))?;
             let entry_path = entry.path().strip_prefix(&self.template_path)?;
@@ -269,7 +329,6 @@ impl ScaffoldDescription {
             }
 
             let filename = entry.path();
-            let template_engine = Handlebars::new();
             let mut content = String::new();
             {
                 let mut file =
@@ -280,9 +339,24 @@ impl ScaffoldDescription {
             let rendered_content = template_engine
                 .render_template(&content, &parameters)
                 .map_err(|e| anyhow!("cannot render template : {}", e))?;
-
-            fs::write(dir_path.join(entry_path), rendered_content)
+            let rendered_path = template_engine
+                .render_template(
+                    dir_path
+                        .join(entry_path)
+                        .to_str()
+                        .expect("path is not utf8 valid"),
+                    &parameters,
+                )
+                .map_err(|e| anyhow!("cannot render template for path : {}", e))?;
+            fs::write(rendered_path, rendered_content)
                 .map_err(|e| anyhow!("cannot create file : {}", e))?;
+        }
+
+        if let Some(notes) = &self.template.notes {
+            let rendered_notes = template_engine
+                .render_template(notes, &parameters)
+                .map_err(|e| anyhow!("cannot render template for path : {}", e))?;
+            println!("------------------------\n\n{}", rendered_notes);
         }
 
         Ok(())

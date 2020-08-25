@@ -2,7 +2,7 @@ use anyhow::Result;
 use dialoguer::Password;
 use git2::{Cred, RemoteCallbacks, Repository};
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub(crate) fn clone(repository: &str, target_dir: &PathBuf, passphrase_needed: bool) -> Result<()> {
     if repository.contains("http") {

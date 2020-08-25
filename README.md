@@ -42,7 +42,10 @@ FLAGS:
     -V, --version       Prints version information
 
 OPTIONS:
-    -t, --target-directory <target-directory>    Specifiy the target directory
+    -n, --name <name>
+            Specify the name of your generated project (and so skip the prompt asking for it)
+
+    -d, --target-directory <target-directory>    Specifiy the target directory
 
 ARGS:
     <template>    Specifiy your template location
@@ -58,16 +61,21 @@ To let you scaffold and generate different projects the only mandatory part is t
 Here is an example of `.scaffold.toml` file:
 
 ```toml
-# Exclude paths you do not want copy/pasted in the generated project
-exclude = [
-    "./target"
-]
-
 # Basic template informations
 [template]
 name = "test"
 author = "Benjamin Coenen <5719034+bnjjj@users.noreply.github.com>"
 version = "0.1.0"
+
+# Exclude paths you do not want copy/pasted in the generated project
+exclude = [
+    "./target"
+]
+
+# Notes to display at the end of the generation
+notes = """
+Have fun using this template called {{name}} ! Here is the description: {{description}} 
+"""
 
 # Parameters are basically all the variables needed to generate your template using templating.
 # It will be displayed as prompt to interact with user (thanks to the message subfield).
@@ -107,8 +115,10 @@ Here is the list of different types you can use for your parameter: `string`, `i
 
 ### Templating
 
-In any files inside your template's directory you can use [Handlebars templating](https://handlebarsjs.com/guide/). Please refer to that documentation for all the syntax about templating. Here is a basic example if you want to display the parameter named `description` and if the boolean parameter `show_description` is set to `true` as described in the previous section.
+In any files inside your template's directory you can use [Handlebars templating](https://handlebarsjs.com/guide/). Please refer to that documentation for all the syntax about templating. If you're looking for custom helpers in Handlerbars you can check the [documentation here](https://github.com/davidB/handlebars_misc_helpers). Here is a basic example if you want to display the parameter named `description` and if the boolean parameter `show_description` is set to `true` as described in the previous section.
 
 ```
 {{#if show_description}} {{description}} {{/if}}
 ```
+
+> You can also put templating in path for directory or filename into your template (example: a file called `{{name}}.rs` would be generated with the right name).
