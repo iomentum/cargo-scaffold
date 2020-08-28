@@ -2,7 +2,7 @@
 
 `cargo-scaffold` is a flexible and easy-to-use developper tool to let you scaffold a project. It's fully configurable without writing any line of code. It generates any kind of projects with a developer friendly CLI.
 
-// Gif shell
+<p align="center"><img src="./preview.gif?raw=true"/></p>
 
 ## Features
 
@@ -26,7 +26,7 @@ You can scaffold your project from any `cargo-template` scaffold located locally
 cargo scaffold your_template_dir
 
 # From git repository
-cargo scaffold git@github.com:username/yourtemplate.git
+cargo scaffold https://github.com/username/template.git
 ```
 
 Here are the available options for `cargo scaffold`:
@@ -36,9 +36,10 @@ USAGE:
     cargo-scaffold scaffold [FLAGS] [OPTIONS] <template>
 
 FLAGS:
+    -a, --append        Append files in the existing directory, do not create directory with the project name
     -f, --force         Override target directory if it exists
     -h, --help          Prints help information
-    -p, --passphrase    Specify if your ssh key is protected by a passphrase
+    -p, --passphrase    Specify if your SSH key is protected by a passphrase
     -V, --version       Prints version information
 
 OPTIONS:

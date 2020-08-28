@@ -11,14 +11,19 @@ use std::{
     string::ToString,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::{App, Arg, ArgMatches};
+use console::{Emoji, Style};
 use dialoguer::{Confirm, Input, MultiSelect, Select};
+use globset::{Glob, GlobSetBuilder};
 use handlebars::Handlebars;
 use heck::KebabCase;
+use indicatif::ProgressBar;
 use serde::{Deserialize, Serialize};
 use toml::Value;
 use walkdir::WalkDir;
+
+const SCAFFOLD_FILENAME: &str = ".scaffold.toml";
 
 pub fn cli_init() -> Result<()> {
     let matches = App::new("cargo")
@@ -39,6 +44,11 @@ pub fn cli_init() -> Result<()> {
                         .long("force")
                         .help("Override target directory if it exists")
                         .takes_value(false),
+                    Arg::with_name("append")
+                        .short("a")
+                        .long("append")
+                        .help("Append files in the existing directory, do not create directory with the project name")
+                        .takes_value(false),
                     Arg::with_name("target-directory")
                         .short("d")
                         .long("target-directory")
@@ -47,7 +57,7 @@ pub fn cli_init() -> Result<()> {
                     Arg::with_name("passphrase")
                         .short("p")
                         .long("passphrase")
-                        .help("Specify if your ssh key is protected by a passphrase")
+                        .help("Specify if your SSH key is protected by a passphrase")
                         .takes_value(false),
                 ]),
         )
@@ -69,6 +79,8 @@ pub struct ScaffoldDescription {
     template_path: PathBuf,
     #[serde(skip)]
     force: bool,
+    #[serde(skip)]
+    append: bool,
     #[serde(skip)]
     project_name: Option<String>,
 }
@@ -100,11 +112,19 @@ pub enum ParameterType {
     MultiSelect,
 }
 
+// TODO: switch to structopt with clap
 pub struct Opts {
+    /// Specifiy your template location
     pub template_path: PathBuf,
+    /// Specify the name of your generated project (and so skip the prompt asking for it)
     pub project_name: Option<String>,
+    /// Specifiy the target directory
     pub target_dir: Option<PathBuf>,
+    /// Override target directory if it exists
     pub force: bool,
+    /// Append files in the existing directory, do not create directory with the project name
+    pub append: bool,
+    /// Specify if your SSH key is protected by a passphrase
     pub passphrase_needed: bool,
 }
 
@@ -132,6 +152,7 @@ impl ScaffoldDescription {
         scaffold_desc.force = matches.is_present("force");
         scaffold_desc.template_path = PathBuf::from(template_path);
         scaffold_desc.project_name = matches.value_of("name").map(String::from);
+        scaffold_desc.append = matches.is_present("append");
 
         Ok(scaffold_desc)
     }
@@ -149,7 +170,8 @@ impl ScaffoldDescription {
                 template_path = tmp_dir.to_string_lossy().to_string();
             }
             let mut scaffold_file =
-                File::open(PathBuf::from(&template_path).join(".scaffold.toml"))?;
+                File::open(PathBuf::from(&template_path).join(SCAFFOLD_FILENAME))
+                    .with_context(|| format!("cannot open .scaffold.toml in {}", template_path))?;
             let mut scaffold_desc_str = String::new();
             scaffold_file.read_to_string(&mut scaffold_desc_str)?;
             toml::from_str(&scaffold_desc_str)?
@@ -159,31 +181,48 @@ impl ScaffoldDescription {
         scaffold_desc.force = opts.force;
         scaffold_desc.template_path = opts.template_path;
         scaffold_desc.project_name = opts.project_name;
+        scaffold_desc.append = opts.append;
 
         Ok(scaffold_desc)
     }
 
     fn create_dir(&self, name: &str) -> Result<PathBuf> {
         let dir_name = name.to_kebab_case();
-        let dir_path = self
+        let mut dir_path = self
             .target_dir
             .clone()
-            .unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| ".".into()))
-            .join(&dir_name);
+            .unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| ".".into()));
 
-        if dir_path.exists() {
-            if !self.force {
-                return Err(anyhow!(
-                    "cannot create {} because it already exists",
-                    dir_path.to_string_lossy()
-                ));
-            } else {
-                fs::remove_dir_all(&dir_path)?;
+        let cyan = Style::new().cyan();
+        if !self.append {
+            dir_path = dir_path.join(&dir_name);
+            if dir_path.exists() {
+                if !self.force {
+                    return Err(anyhow!(
+                        "cannot create {} because it already exists",
+                        dir_path.to_string_lossy()
+                    ));
+                } else {
+                    println!(
+                        "{} {}",
+                        Emoji("🔄", ""),
+                        cyan.apply_to("Override directory…"),
+                    );
+                    fs::remove_dir_all(&dir_path).with_context(|| "Cannot remove directory")?;
+                }
             }
+            fs::create_dir_all(&dir_path).with_context(|| "Cannot create directory")?;
+        } else {
+            println!(
+                "{} {}",
+                Emoji("🔄", ""),
+                cyan.apply_to(format!(
+                    "Append to directory {}…",
+                    dir_path.to_string_lossy()
+                )),
+            );
         }
-
-        fs::create_dir_all(&dir_path)?;
-        let path = fs::canonicalize(dir_path)?;
+        let path = fs::canonicalize(dir_path).with_context(|| "Cannot canonicalize path")?;
 
         Ok(path)
     }
@@ -263,7 +302,17 @@ impl ScaffoldDescription {
     }
 
     pub fn scaffold(&self) -> Result<()> {
-        let excludes = self.template.exclude.clone().unwrap_or_default();
+        let excludes = match &self.template.exclude {
+            Some(exclude) => {
+                let mut builder = GlobSetBuilder::new();
+                for ex in exclude {
+                    builder.add(Glob::new(ex)?);
+                }
+
+                builder.build()?
+            }
+            None => GlobSetBuilder::new().build()?,
+        };
 
         let mut parameters: BTreeMap<String, Value> = self.fetch_parameters_value()?;
         let name: String = match &self.project_name {
@@ -278,7 +327,7 @@ impl ScaffoldDescription {
             Value::String(dir_path.to_str().unwrap_or_default().to_string()),
         );
 
-        parameters.insert("name".to_string(), Value::String(name));
+        parameters.insert("name".to_string(), Value::String(name.clone()));
         // List entries inside directory
         let entries = WalkDir::new(&self.template_path)
             .into_iter()
@@ -292,33 +341,29 @@ impl ScaffoldDescription {
                     return false;
                 }
 
-                if entry.file_name() == ".scaffold.toml" {
+                if entry.file_name() == SCAFFOLD_FILENAME {
                     return false;
                 }
 
-                for excl in &excludes {
-                    if entry
+                !excludes.is_match(
+                    entry
                         .path()
-                        .to_str()
-                        .map(|s| s.starts_with(excl))
-                        .unwrap_or(false)
-                    {
-                        return false;
-                    }
-                }
-
-                true
+                        .strip_prefix(&self.template_path)
+                        .unwrap_or_else(|_| entry.path()),
+                )
             });
 
         let mut template_engine = Handlebars::new();
         handlebars_misc_helpers::setup_handlebars(&mut template_engine);
+
+        let cyan = Style::new().cyan();
+        println!("{} {}", Emoji("🔄", ""), cyan.apply_to("Templating files…"),);
         for entry in entries {
             let entry = entry.map_err(|e| anyhow!("cannot read entry : {}", e))?;
             let entry_path = entry.path().strip_prefix(&self.template_path)?;
             if entry_path == PathBuf::from("") {
                 continue;
             }
-            // TODO: check to ignore .git dir
             if entry.file_type().is_dir() {
                 if entry.path().to_str() == Some(".") {
                     continue;
@@ -348,15 +393,34 @@ impl ScaffoldDescription {
                     &parameters,
                 )
                 .map_err(|e| anyhow!("cannot render template for path : {}", e))?;
+
             fs::write(rendered_path, rendered_content)
                 .map_err(|e| anyhow!("cannot create file : {}", e))?;
         }
+
+        let green = Style::new().green();
+        println!(
+            "{} Your project {} has been generated successfuly {}",
+            Emoji("✅", ""),
+            green.apply_to(name),
+            Emoji("🚀", "")
+        );
+
+        let yellow = Style::new().yellow();
+        println!(
+            "\n{}\n",
+            yellow.apply_to("-----------------------------------------------------"),
+        );
 
         if let Some(notes) = &self.template.notes {
             let rendered_notes = template_engine
                 .render_template(notes, &parameters)
                 .map_err(|e| anyhow!("cannot render template for path : {}", e))?;
-            println!("------------------------\n\n{}", rendered_notes);
+            println!("{}", rendered_notes);
+            println!(
+                "\n{}\n",
+                yellow.apply_to("-----------------------------------------------------"),
+            );
         }
 
         Ok(())

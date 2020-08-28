@@ -1,10 +1,17 @@
 use anyhow::Result;
+use console::{Emoji, Style};
 use dialoguer::Password;
 use git2::{Cred, RemoteCallbacks, Repository};
 use std::env;
 use std::path::PathBuf;
 
 pub(crate) fn clone(repository: &str, target_dir: &PathBuf, passphrase_needed: bool) -> Result<()> {
+    let cyan = Style::new().cyan();
+    println!(
+        "{} {}",
+        Emoji("🔄", ""),
+        cyan.apply_to("Cloning repository…"),
+    );
     if repository.contains("http") {
         Repository::clone(repository, &target_dir)?;
     } else {
