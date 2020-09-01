@@ -2,7 +2,7 @@
 
 `cargo-scaffold` is a flexible and easy-to-use developper tool to let you scaffold a project. It's fully configurable without writing any line of code. It generates any kind of projects with a developer friendly CLI.
 
-<p align="center"><img src="./preview.gif?raw=true"/></p>
+<p align="center"><img src="./logo.svg?raw=true" style="width: 35%; height: 35%;" /></p>
 
 ## Features
 
@@ -10,6 +10,9 @@
 + Declarative
 + User interactions automatically generated
 + Not only for Rust crate/project. It's completely language agnostic
+
+<p align="center"><img src="./preview.gif?raw=true"/></p>
+
 
 ## Installation
 
@@ -123,3 +126,7 @@ In any files inside your template's directory you can use [Handlebars templating
 ```
 
 > You can also put templating in path for directory or filename into your template (example: a file called `{{name}}.rs` would be generated with the right name).
+
+## Credits
+
+Thanks [@Arlune](https://github.com/Arlune) for this awesome logo and all reviewers.
