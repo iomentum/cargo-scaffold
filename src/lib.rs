@@ -65,7 +65,7 @@ pub fn cli_init() -> Result<()> {
 
     match matches.subcommand() {
         ("scaffold", Some(subcmd)) => ScaffoldDescription::from_cli(subcmd)?.scaffold(),
-        _ => Err(anyhow!("cannot fin corresponding command")),
+        _ => Err(anyhow!("cannot find corresponding command")),
     }
 }
 
