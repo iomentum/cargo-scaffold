@@ -130,3 +130,7 @@ In any files inside your template's directory you can use [Handlebars templating
 ## Credits
 
 Thanks [@Arlune](https://github.com/Arlune) for this awesome logo and all reviewers.
+
+## Alternatives
+
++ [ffizer](https://github.com/ffizer/ffizer)
