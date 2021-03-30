@@ -1,4 +1,5 @@
 mod git;
+mod helpers;
 
 use crate::git::clone;
 
@@ -18,6 +19,7 @@ use dialoguer::{Confirm, Input, MultiSelect, Select};
 use globset::{Glob, GlobSetBuilder};
 use handlebars::Handlebars;
 use heck::KebabCase;
+use helpers::ForRangHelper;
 use indicatif::ProgressBar;
 use serde::{Deserialize, Serialize};
 use toml::Value;
@@ -355,6 +357,7 @@ impl ScaffoldDescription {
 
         let mut template_engine = Handlebars::new();
         handlebars_misc_helpers::setup_handlebars(&mut template_engine);
+        template_engine.register_helper("forRange", Box::new(ForRangHelper));
 
         let cyan = Style::new().cyan();
         println!("{} {}", Emoji("🔄", ""), cyan.apply_to("Templating files…"),);

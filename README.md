@@ -6,13 +6,12 @@
 
 ## Features
 
-+ Scaffold a project in seconds
-+ Declarative
-+ User interactions automatically generated
-+ Not only for Rust crate/project. It's completely language agnostic
+- Scaffold a project in seconds
+- Declarative
+- User interactions automatically generated
+- Not only for Rust crate/project. It's completely language agnostic
 
 <p align="center"><img src="./preview.gif?raw=true"/></p>
-
 
 ## Installation
 
@@ -55,7 +54,6 @@ ARGS:
     <template>    Specifiy your template location
 ```
 
-
 ## Write your own template
 
 To let you scaffold and generate different projects the only mandatory part is to have a `.scaffold.toml` file at the root of the template directory. This file is used to document and add user interactions for your template. In your template's directory each files and directories will be copy/pasted to your generated project but updated using [Handlebars templating](https://handlebarsjs.com/).
@@ -78,7 +76,7 @@ exclude = [
 
 # Notes to display at the end of the generation
 notes = """
-Have fun using this template called {{name}} ! Here is the description: {{description}} 
+Have fun using this template called {{name}} ! Here is the description: {{description}}
 """
 
 # Parameters are basically all the variables needed to generate your template using templating.
@@ -123,6 +121,8 @@ In any files inside your template's directory you can use [Handlebars templating
 
 ```
 {{#if show_description}} {{description}} {{/if}}
+{{#forRange 5}}
+Repeat this line 5 times with the current {{@index}}{{/forRange}}
 ```
 
 > You can also put templating in path for directory or filename into your template (example: a file called `{{name}}.rs` would be generated with the right name).
@@ -133,4 +133,4 @@ Thanks [@Arlune](https://github.com/Arlune) for this awesome logo and all review
 
 ## Alternatives
 
-+ [ffizer](https://github.com/ffizer/ffizer)
+- [ffizer](https://github.com/ffizer/ffizer)

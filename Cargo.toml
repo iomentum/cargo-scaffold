@@ -1,6 +1,6 @@
 [package]
 name = "cargo-scaffold"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Benjamin Coenen <5719034+bnjjj@users.noreply.github.com>"]
 edition = "2018"
 description = "cargo scaffold lets you scaffold and generate an entire stack based on a simple toml file and make templating into your templates"
@@ -10,7 +10,7 @@ repository = "https://github.com/iomentum/cargo-scaffold"
 keywords = ["scaffold", "generate", "cargo", "templating"]
 
 [dependencies]
-cargo = "0.46.1"
+cargo = "0.52"
 anyhow = "1.0.32"
 clap = "2.33.3" 
 serde = { version = "1.0.115", features = ["derive"] }
