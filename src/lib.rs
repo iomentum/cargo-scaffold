@@ -20,7 +20,6 @@ use globset::{Glob, GlobSetBuilder};
 use handlebars::Handlebars;
 use heck::KebabCase;
 use helpers::ForRangHelper;
-use indicatif::ProgressBar;
 use serde::{Deserialize, Serialize};
 use toml::Value;
 use walkdir::WalkDir;
