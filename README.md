@@ -79,6 +79,17 @@ notes = """
 Have fun using this template called {{name}} ! Here is the description: {{description}}
 """
 
+[hooks]
+# Commands to be executed before scaffolding, from within the generated project
+pre = [
+    "bash -c some_pre_script.sh"
+]
+# Commands to be executed after scaffolding, from within the generated project
+post = [
+    "cargo vendor",
+    "bash -c some_post_script.sh"
+]
+
 # Parameters are basically all the variables needed to generate your template using templating.
 # It will be displayed as prompt to interact with user (thanks to the message subfield).
 # All the parameters will be available in your templates as variables (example: `{{description}}`).
