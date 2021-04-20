@@ -8,7 +8,8 @@ use std::{
     env,
     fs::{self, File},
     io::Read,
-    path::PathBuf,
+    path::{Path, PathBuf},
+    process::Command,
     string::ToString,
 };
 
@@ -20,7 +21,6 @@ use globset::{Glob, GlobSetBuilder};
 use handlebars::Handlebars;
 use heck::KebabCase;
 use helpers::ForRangHelper;
-use indicatif::ProgressBar;
 use serde::{Deserialize, Serialize};
 use toml::Value;
 use walkdir::WalkDir;
@@ -75,6 +75,7 @@ pub fn cli_init() -> Result<()> {
 pub struct ScaffoldDescription {
     template: TemplateDescription,
     parameters: Option<BTreeMap<String, Parameter>>,
+    hooks: Option<Hooks>,
     #[serde(skip)]
     target_dir: Option<PathBuf>,
     #[serde(skip)]
@@ -101,6 +102,12 @@ pub struct Parameter {
     r#type: ParameterType,
     default: Option<Value>,
     values: Option<Vec<Value>>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
+pub struct Hooks {
+    pre: Option<Vec<String>>,
+    post: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -329,6 +336,23 @@ impl ScaffoldDescription {
             Value::String(dir_path.to_str().unwrap_or_default().to_string()),
         );
 
+        // pre-hooks
+        if let Some(Hooks {
+            pre: Some(commands),
+            ..
+        }) = &self.hooks
+        {
+            if !commands.is_empty() {
+                let cyan = Style::new().cyan();
+                println!(
+                    "{} {}",
+                    Emoji("🤖", ""),
+                    cyan.apply_to("Triggering pre-hooks…"),
+                );
+                self.run_hooks(&dir_path, &commands)?;
+            }
+        }
+
         parameters.insert("name".to_string(), Value::String(name.clone()));
         // List entries inside directory
         let entries = WalkDir::new(&self.template_path)
@@ -426,6 +450,113 @@ impl ScaffoldDescription {
             );
         }
 
+        // post-hooks
+        if let Some(Hooks {
+            post: Some(commands),
+            ..
+        }) = &self.hooks
+        {
+            if !commands.is_empty() {
+                let cyan = Style::new().cyan();
+                println!(
+                    "{} {}",
+                    Emoji("🤖", ""),
+                    cyan.apply_to("Triggering post-hooks…"),
+                );
+                self.run_hooks(&dir_path, &commands)?;
+            }
+        }
+
         Ok(())
+    }
+
+    fn run_hooks(&self, project_path: &Path, commands: &[String]) -> Result<()> {
+        let initial_path = std::env::current_dir()?;
+        // move to project directory
+        std::env::set_current_dir(&project_path).map_err(|e| {
+            anyhow!(
+                "cannot change directory to project path {:?}: {}",
+                &project_path,
+                e
+            )
+        })?;
+        // run commands
+        let magenta = Style::new().magenta();
+        for cmd in commands {
+            println!("{} {}", Emoji("✨", ""), magenta.apply_to(cmd));
+            ScaffoldDescription::run_cmd(&cmd)?;
+        }
+        // move back to initial path
+        std::env::set_current_dir(&initial_path).map_err(|e| {
+            anyhow!(
+                "cannot move back to original path {:?}: {}",
+                &initial_path,
+                e
+            )
+        })?;
+        Ok(())
+    }
+
+    pub fn run_cmd(cmd: &str) -> Result<()> {
+        let mut command = ScaffoldDescription::setup_cmd(&cmd)?;
+        let mut child = command.spawn().expect("cannot execute command");
+        child.wait().expect("failed to wait on child process");
+        Ok(())
+    }
+
+    pub fn setup_cmd(cmd: &str) -> Result<Command> {
+        let splitted_cmd =
+            shell_words::split(&cmd).map_err(|e| anyhow!("cannot split command line : {}", e))?;
+        if splitted_cmd.is_empty() {
+            anyhow::bail!("command argument is invalid: empty after splitting");
+        }
+        let mut command = Command::new(&splitted_cmd[0]);
+        if splitted_cmd.len() > 1 {
+            command.args(&splitted_cmd[1..]);
+        }
+        Ok(command)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ScaffoldDescription;
+    use std::fs::{remove_file, File};
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    #[test]
+    fn split_and_run_cmd() {
+        let mut command = ScaffoldDescription::setup_cmd("ls -alh .").unwrap();
+        command.stdout(Stdio::null());
+        let mut child = command.spawn().expect("cannot execute command");
+        child.wait().expect("failed to wait on child process");
+
+        let mut command = ScaffoldDescription::setup_cmd("/bin/bash -c ls").unwrap();
+        command.stdout(Stdio::null());
+        let mut child = command.spawn().expect("cannot execute command");
+        child.wait().expect("failed to wait on child process");
+    }
+
+    #[test]
+    fn split_and_run_script() {
+        let script_name = "./test.sh";
+        let cmd = format!("/bin/bash -c {}", script_name);
+        {
+            let mut file = File::create(script_name).unwrap();
+            file.write_all(b"#!/bin/bash\nls .\nfree").unwrap();
+            Command::new("chmod")
+                .arg("+x")
+                .arg(&script_name)
+                .output()
+                .expect("can't set execute perm on script file");
+        }
+        let mut command = ScaffoldDescription::setup_cmd(&cmd).unwrap();
+        command.stdout(Stdio::null());
+        let mut child = command.spawn().expect("cannot execute command");
+        child.wait().expect("failed to wait on child process");
+        // uncomment to see output of script execution
+        // std::io::stdout().write_all(&_output.stdout).unwrap();
+        remove_file(&script_name).unwrap();
     }
 }
