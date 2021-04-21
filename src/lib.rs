@@ -7,7 +7,7 @@ use std::{
     collections::BTreeMap,
     env,
     fs::{self, File},
-    io::Read,
+    io::{Read, Write},
     path::{Path, PathBuf},
     process::Command,
     string::ToString,
@@ -17,9 +17,9 @@ use anyhow::{anyhow, Context, Result};
 use clap::{App, Arg, ArgMatches};
 use console::{Emoji, Style};
 use dialoguer::{Confirm, Input, MultiSelect, Select};
+use fs::OpenOptions;
 use globset::{Glob, GlobSetBuilder};
 use handlebars::Handlebars;
-use heck::KebabCase;
 use helpers::ForRangHelper;
 use serde::{Deserialize, Serialize};
 use toml::Value;
@@ -196,7 +196,6 @@ impl ScaffoldDescription {
     }
 
     fn create_dir(&self, name: &str) -> Result<PathBuf> {
-        let dir_name = name.to_kebab_case();
         let mut dir_path = self
             .target_dir
             .clone()
@@ -204,7 +203,7 @@ impl ScaffoldDescription {
 
         let cyan = Style::new().cyan();
         if !self.append {
-            dir_path = dir_path.join(&dir_name);
+            dir_path = dir_path.join(name);
             if dir_path.exists() {
                 if !self.force {
                     return Err(anyhow!(
@@ -219,6 +218,15 @@ impl ScaffoldDescription {
                     );
                     fs::remove_dir_all(&dir_path).with_context(|| "Cannot remove directory")?;
                 }
+            } else {
+                println!(
+                    "{} {}",
+                    Emoji("🔄", ""),
+                    cyan.apply_to(format!(
+                        "Creating directory {}…",
+                        dir_path.to_string_lossy()
+                    )),
+                );
             }
             fs::create_dir_all(&dir_path).with_context(|| "Cannot create directory")?;
         } else {
@@ -420,8 +428,19 @@ impl ScaffoldDescription {
                     &parameters,
                 )
                 .map_err(|e| anyhow!("cannot render template for path : {}", e))?;
+            let permissions = entry
+                .metadata()
+                .map_err(|e| anyhow!("cannot get metadata for path : {}", e))?
+                .permissions();
 
-            fs::write(rendered_path, rendered_content)
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .open(&rendered_path)?;
+            file.set_permissions(permissions).map_err(|e| {
+                anyhow!("cannot set permission to file '{}' : {}", rendered_path, e)
+            })?;
+            file.write_all(rendered_content.as_bytes())
                 .map_err(|e| anyhow!("cannot create file : {}", e))?;
         }
 
