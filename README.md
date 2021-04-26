@@ -29,6 +29,9 @@ cargo scaffold your_template_dir
 
 # From git repository
 cargo scaffold https://github.com/username/template.git
+
+# From git repository based on a specific commit
+cargo scaffold https://github.com/username/template.git deed14dcbf17ba87f6659ea05755cf94cb1464ab
 ```
 
 Here are the available options for `cargo scaffold`:
@@ -45,6 +48,9 @@ FLAGS:
     -V, --version       Prints version information
 
 OPTIONS:
+    -c, --commit <commit>
+            Full commit hash from which the template is cloned (i.e.: "deed14dcbf17ba87f6659ea05755cf94cb1464ab")
+
     -n, --name <name>
             Specify the name of your generated project (and so skip the prompt asking for it)
 
