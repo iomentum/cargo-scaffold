@@ -25,6 +25,7 @@ indicatif = "0.15.0"
 console = "0.12.0"
 globset = "0.4.5"
 shell-words = "1.0"
+structopt = "0.3"
 
 [[bin]]
 path = "src/main.rs"

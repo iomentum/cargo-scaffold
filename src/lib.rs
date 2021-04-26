@@ -14,7 +14,6 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
-use clap::{App, Arg, ArgMatches};
 use console::{Emoji, Style};
 use dialoguer::{Confirm, Input, MultiSelect, Select};
 use fs::OpenOptions;
@@ -22,54 +21,11 @@ use globset::{Glob, GlobSetBuilder};
 use handlebars::Handlebars;
 use helpers::ForRangHelper;
 use serde::{Deserialize, Serialize};
+use structopt::StructOpt;
 use toml::Value;
 use walkdir::WalkDir;
 
 const SCAFFOLD_FILENAME: &str = ".scaffold.toml";
-
-pub fn cli_init() -> Result<()> {
-    let matches = App::new("cargo")
-        .subcommand(
-            App::new("scaffold")
-                .about("Scaffold a new project from a template")
-                .args(&[
-                    Arg::with_name("template")
-                        .help("Specifiy your template location")
-                        .required(true),
-                    Arg::with_name("name")
-                        .short("n")
-                        .long("name")
-                        .help("Specify the name of your generated project (and so skip the prompt asking for it)")
-                        .takes_value(true),
-                    Arg::with_name("force")
-                        .short("f")
-                        .long("force")
-                        .help("Override target directory if it exists")
-                        .takes_value(false),
-                    Arg::with_name("append")
-                        .short("a")
-                        .long("append")
-                        .help("Append files in the existing directory, do not create directory with the project name")
-                        .takes_value(false),
-                    Arg::with_name("target-directory")
-                        .short("d")
-                        .long("target-directory")
-                        .help("Specifiy the target directory")
-                        .takes_value(true),
-                    Arg::with_name("passphrase")
-                        .short("p")
-                        .long("passphrase")
-                        .help("Specify if your SSH key is protected by a passphrase")
-                        .takes_value(false),
-                ]),
-        )
-        .get_matches();
-
-    match matches.subcommand() {
-        ("scaffold", Some(subcmd)) => ScaffoldDescription::from_cli(subcmd)?.scaffold(),
-        _ => Err(anyhow!("cannot find corresponding command")),
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ScaffoldDescription {
@@ -121,51 +77,40 @@ pub enum ParameterType {
     MultiSelect,
 }
 
-// TODO: switch to structopt with clap
+#[derive(StructOpt)]
+pub enum Cargo {
+    #[structopt(about = "Scaffold a new project from a template")]
+    Scaffold(Opts),
+}
+
+#[derive(Debug, StructOpt)]
 pub struct Opts {
     /// Specifiy your template location
-    pub template_path: PathBuf,
+    #[structopt(name = "template", required = true)]
+    template_path: PathBuf,
+
     /// Specify the name of your generated project (and so skip the prompt asking for it)
-    pub project_name: Option<String>,
+    #[structopt(name = "name", short = "n", long = "name")]
+    project_name: Option<String>,
+
     /// Specifiy the target directory
-    pub target_dir: Option<PathBuf>,
+    #[structopt(name = "target-directory", short = "d", long = "target-directory")]
+    target_dir: Option<PathBuf>,
+
     /// Override target directory if it exists
-    pub force: bool,
+    #[structopt(short = "f", long = "force")]
+    force: bool,
+
     /// Append files in the existing directory, do not create directory with the project name
-    pub append: bool,
+    #[structopt(short = "a", long = "append")]
+    append: bool,
+
     /// Specify if your SSH key is protected by a passphrase
-    pub passphrase_needed: bool,
+    #[structopt(short = "p", long = "passphrase")]
+    passphrase_needed: bool,
 }
 
 impl ScaffoldDescription {
-    pub fn from_cli(matches: &ArgMatches) -> Result<Self> {
-        let mut template_path = matches.value_of("template").unwrap().to_string();
-        let mut scaffold_desc: ScaffoldDescription = {
-            if template_path.ends_with(".git") {
-                let tmp_dir = env::temp_dir().join(format!("{:x}", md5::compute(&template_path)));
-                if tmp_dir.exists() {
-                    fs::remove_dir_all(&tmp_dir)?;
-                }
-                fs::create_dir_all(&tmp_dir)?;
-                clone(&template_path, &tmp_dir, matches.is_present("passphrase"))?;
-                template_path = tmp_dir.to_string_lossy().to_string();
-            }
-            let mut scaffold_file =
-                File::open(PathBuf::from(&template_path).join(".scaffold.toml"))?;
-            let mut scaffold_desc_str = String::new();
-            scaffold_file.read_to_string(&mut scaffold_desc_str)?;
-            toml::from_str(&scaffold_desc_str)?
-        };
-
-        scaffold_desc.target_dir = matches.value_of("target-directory").map(PathBuf::from);
-        scaffold_desc.force = matches.is_present("force");
-        scaffold_desc.template_path = PathBuf::from(template_path);
-        scaffold_desc.project_name = matches.value_of("name").map(String::from);
-        scaffold_desc.append = matches.is_present("append");
-
-        Ok(scaffold_desc)
-    }
-
     pub fn new(opts: Opts) -> Result<Self> {
         let mut template_path = opts.template_path.to_string_lossy().to_string();
         let mut scaffold_desc: ScaffoldDescription = {

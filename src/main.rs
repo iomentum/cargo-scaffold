@@ -1,6 +1,8 @@
 use anyhow::Result;
-use cargo_scaffold::cli_init;
+use cargo_scaffold::{Cargo, ScaffoldDescription};
+use structopt::StructOpt;
 
 fn main() -> Result<()> {
-    cli_init()
+    let Cargo::Scaffold(opts) = Cargo::from_args();
+    ScaffoldDescription::new(opts)?.scaffold()
 }
