@@ -89,6 +89,11 @@ pub struct Opts {
     #[structopt(name = "template", required = true)]
     template_path: PathBuf,
 
+    /// Full commit hash from which the template is cloned
+    /// (i.e.: "deed14dcbf17ba87f6659ea05755cf94cb1464ab")
+    #[structopt(name = "commit", short = "c", long = "commit")]
+    template_commit: Option<String>,
+
     /// Specify the name of your generated project (and so skip the prompt asking for it)
     #[structopt(name = "name", short = "n", long = "name")]
     project_name: Option<String>,
@@ -120,7 +125,12 @@ impl ScaffoldDescription {
                     fs::remove_dir_all(&tmp_dir)?;
                 }
                 fs::create_dir_all(&tmp_dir)?;
-                clone(&template_path, &tmp_dir, opts.passphrase_needed)?;
+                clone(
+                    &template_path,
+                    &opts.template_commit,
+                    &tmp_dir,
+                    opts.passphrase_needed,
+                )?;
                 template_path = tmp_dir.to_string_lossy().to_string();
             }
             let mut scaffold_file =
