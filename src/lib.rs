@@ -143,7 +143,7 @@ impl ScaffoldDescription {
 
         scaffold_desc.target_dir = opts.target_dir;
         scaffold_desc.force = opts.force;
-        scaffold_desc.template_path = opts.template_path;
+        scaffold_desc.template_path = PathBuf::from(template_path);
         scaffold_desc.project_name = opts.project_name;
         scaffold_desc.append = opts.append;
 
