@@ -1,6 +1,6 @@
 [package]
 name = "cargo-scaffold"
-version = "0.2.6"
+version = "0.2.7"
 authors = ["Benjamin Coenen <5719034+bnjjj@users.noreply.github.com>"]
 edition = "2018"
 description = "cargo scaffold lets you scaffold and generate an entire stack based on a simple toml file and make templating into your templates"
