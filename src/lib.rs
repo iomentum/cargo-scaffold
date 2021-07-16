@@ -58,6 +58,7 @@ pub struct Parameter {
     r#type: ParameterType,
     default: Option<Value>,
     values: Option<Vec<Value>>,
+    tags: Option<Vec<String>>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
@@ -87,32 +88,32 @@ pub enum Cargo {
 pub struct Opts {
     /// Specifiy your template location
     #[structopt(name = "template", required = true)]
-    template_path: PathBuf,
+    pub template_path: PathBuf,
 
     /// Full commit hash from which the template is cloned
     /// (i.e.: "deed14dcbf17ba87f6659ea05755cf94cb1464ab")
     #[structopt(name = "commit", short = "c", long = "commit")]
-    template_commit: Option<String>,
+    pub template_commit: Option<String>,
 
     /// Specify the name of your generated project (and so skip the prompt asking for it)
     #[structopt(name = "name", short = "n", long = "name")]
-    project_name: Option<String>,
+    pub project_name: Option<String>,
 
     /// Specifiy the target directory
     #[structopt(name = "target-directory", short = "d", long = "target-directory")]
-    target_dir: Option<PathBuf>,
+    pub target_dir: Option<PathBuf>,
 
     /// Override target directory if it exists
     #[structopt(short = "f", long = "force")]
-    force: bool,
+    pub force: bool,
 
     /// Append files in the existing directory, do not create directory with the project name
     #[structopt(short = "a", long = "append")]
-    append: bool,
+    pub append: bool,
 
     /// Specify if your SSH key is protected by a passphrase
     #[structopt(short = "p", long = "passphrase")]
-    passphrase_needed: bool,
+    pub passphrase_needed: bool,
 }
 
 impl ScaffoldDescription {
@@ -148,6 +149,14 @@ impl ScaffoldDescription {
         scaffold_desc.append = opts.append;
 
         Ok(scaffold_desc)
+    }
+
+    pub fn name(&self) -> Option<String> {
+        self.project_name.clone()
+    }
+
+    pub fn parameters(&self) -> Option<&BTreeMap<String, Parameter>> {
+        self.parameters.as_ref()
     }
 
     fn create_dir(&self, name: &str) -> Result<PathBuf> {
@@ -273,7 +282,18 @@ impl ScaffoldDescription {
         Ok(parameters)
     }
 
+    // Scaffold the project with the template
     pub fn scaffold(&self) -> Result<()> {
+        self.internal_scaffold(None)
+    }
+
+    /// Scaffold the project with the given parameters defined in the .scaffold.toml without prompting any inputs
+    /// It's a non-interactive mode
+    pub fn scaffold_with_parameters(&self, parameters: BTreeMap<String, Value>) -> Result<()> {
+        self.internal_scaffold(parameters.into())
+    }
+
+    fn internal_scaffold(&self, parameters: Option<BTreeMap<String, Value>>) -> Result<()> {
         let excludes = match &self.template.exclude {
             Some(exclude) => {
                 let mut builder = GlobSetBuilder::new();
@@ -286,7 +306,11 @@ impl ScaffoldDescription {
             None => GlobSetBuilder::new().build()?,
         };
 
-        let mut parameters: BTreeMap<String, Value> = self.fetch_parameters_value()?;
+        let mut parameters: BTreeMap<String, Value> = match parameters {
+            Some(params) => params,
+            None => self.fetch_parameters_value()?,
+        };
+
         let name: String = match &self.project_name {
             Some(project_name) => project_name.clone(),
             None => Input::new()
