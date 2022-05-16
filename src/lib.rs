@@ -120,6 +120,34 @@ pub struct Opts {
     pub private_key_path: Option<PathBuf>,
 }
 
+#[buildstructor::buildstructor]
+impl Opts {
+    #[builder]
+    #[allow(clippy::too_many_arguments)]
+    #[allow(dead_code)]
+    pub fn new(
+        template_path: PathBuf,
+        template_commit: Option<String>,
+        project_name: Option<String>,
+        target_dir: Option<PathBuf>,
+        force: Option<bool>,
+        append: Option<bool>,
+        passphrase_needed: Option<bool>,
+        private_key_path: Option<PathBuf>,
+    ) -> Opts {
+        Self {
+            template_path,
+            template_commit,
+            project_name,
+            target_dir,
+            force: force.unwrap_or_default(),
+            append: append.unwrap_or_default(),
+            passphrase_needed: passphrase_needed.unwrap_or_default(),
+            private_key_path,
+        }
+    }
+}
+
 impl ScaffoldDescription {
     pub fn new(opts: Opts) -> Result<Self> {
         let mut template_path = opts.template_path.to_string_lossy().to_string();
