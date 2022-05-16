@@ -8,11 +8,12 @@ fn main() -> Result<()> {
     let opts = Opts {
         append: false,
         force: false,
-        passphrase_needed: false,
+        passphrase_needed: true,
         project_name: String::from("testlib").into(),
-        template_path: PathBuf::from("https://github.com/Cosmian/mpc_rust_template.git"),
+        template_path: PathBuf::from("git@github.com:Cosmian/mpc_rust_template.git"),
         target_dir: None,
         template_commit: None,
+        private_key_path: None,
     };
     let mut params = BTreeMap::new();
     params.insert("players_nb".to_string(), Value::Integer(3));

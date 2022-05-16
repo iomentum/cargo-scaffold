@@ -114,6 +114,10 @@ pub struct Opts {
     /// Specify if your SSH key is protected by a passphrase
     #[structopt(short = "p", long = "passphrase")]
     pub passphrase_needed: bool,
+
+    /// Specify if your private SSH key is located in another location than $HOME/.ssh/id_rsa
+    #[structopt(short = "k", long = "private_key_path")]
+    pub private_key_path: Option<PathBuf>,
 }
 
 impl ScaffoldDescription {
@@ -130,6 +134,12 @@ impl ScaffoldDescription {
                     &template_path,
                     &opts.template_commit,
                     &tmp_dir,
+                    &opts.private_key_path.unwrap_or_else(|| {
+                        PathBuf::from(&format!(
+                            "{}/.ssh/id_rsa",
+                            env::var("HOME").expect("cannot fetch $HOME")
+                        ))
+                    }),
                     opts.passphrase_needed,
                 )?;
                 template_path = tmp_dir.to_string_lossy().to_string();
@@ -336,7 +346,7 @@ impl ScaffoldDescription {
                     Emoji("🤖", ""),
                     cyan.apply_to("Triggering pre-hooks…"),
                 );
-                self.run_hooks(&dir_path, &commands)?;
+                self.run_hooks(&dir_path, commands)?;
             }
         }
 
@@ -367,6 +377,7 @@ impl ScaffoldDescription {
             });
 
         let mut template_engine = Handlebars::new();
+        template_engine.set_strict_mode(false);
         handlebars_misc_helpers::setup_handlebars(&mut template_engine);
         template_engine.register_helper("forRange", Box::new(ForRangHelper));
 
@@ -461,7 +472,7 @@ impl ScaffoldDescription {
                     Emoji("🤖", ""),
                     cyan.apply_to("Triggering post-hooks…"),
                 );
-                self.run_hooks(&dir_path, &commands)?;
+                self.run_hooks(&dir_path, commands)?;
             }
         }
 
@@ -482,7 +493,7 @@ impl ScaffoldDescription {
         let magenta = Style::new().magenta();
         for cmd in commands {
             println!("{} {}", Emoji("✨", ""), magenta.apply_to(cmd));
-            ScaffoldDescription::run_cmd(&cmd)?;
+            ScaffoldDescription::run_cmd(cmd)?;
         }
         // move back to initial path
         std::env::set_current_dir(&initial_path).map_err(|e| {
@@ -496,7 +507,7 @@ impl ScaffoldDescription {
     }
 
     pub fn run_cmd(cmd: &str) -> Result<()> {
-        let mut command = ScaffoldDescription::setup_cmd(&cmd)?;
+        let mut command = ScaffoldDescription::setup_cmd(cmd)?;
         let mut child = command.spawn().expect("cannot execute command");
         child.wait().expect("failed to wait on child process");
         Ok(())
@@ -504,7 +515,7 @@ impl ScaffoldDescription {
 
     pub fn setup_cmd(cmd: &str) -> Result<Command> {
         let splitted_cmd =
-            shell_words::split(&cmd).map_err(|e| anyhow!("cannot split command line : {}", e))?;
+            shell_words::split(cmd).map_err(|e| anyhow!("cannot split command line : {}", e))?;
         if splitted_cmd.is_empty() {
             anyhow::bail!("command argument is invalid: empty after splitting");
         }

@@ -38,7 +38,7 @@ impl HelperDef for ForRangHelper {
         match template {
             Some(t) => match *value.value() {
                 JsonValue::Number(ref number) => {
-                    let block_context = create_block(&value);
+                    let block_context = create_block(value);
                     rc.push_block(block_context);
 
                     let number = number
@@ -50,9 +50,9 @@ impl HelperDef for ForRangHelper {
                             let is_last = i == number - 1;
 
                             let index = to_json(i);
-                            block.set_local_var(String::from("@first"), to_json(is_first));
-                            block.set_local_var(String::from("@last"), to_json(is_last));
-                            block.set_local_var(String::from("@index"), index);
+                            block.set_local_var("first", to_json(is_first));
+                            block.set_local_var("last", to_json(is_last));
+                            block.set_local_var("index", index);
                         }
 
                         t.render(r, ctx, rc, out)?;
