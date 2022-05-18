@@ -90,6 +90,10 @@ pub struct Opts {
     #[structopt(name = "template", required = true)]
     pub template_path: PathBuf,
 
+    /// Specifiy your template location in the repository if it's not located at the root of your repository
+    #[structopt(name = "repository_template_path", short = "r", long = "path")]
+    pub repository_template_path: Option<PathBuf>,
+
     /// Full commit hash from which the template is cloned
     /// (i.e.: "deed14dcbf17ba87f6659ea05755cf94cb1464ab")
     #[structopt(name = "commit", short = "c", long = "commit")]
@@ -127,6 +131,7 @@ impl Opts {
     #[allow(dead_code)]
     pub fn new(
         template_path: PathBuf,
+        repository_template_path: Option<PathBuf>,
         template_commit: Option<String>,
         project_name: Option<String>,
         target_dir: Option<PathBuf>,
@@ -137,6 +142,7 @@ impl Opts {
     ) -> Opts {
         Self {
             template_path,
+            repository_template_path,
             template_commit,
             project_name,
             target_dir,
@@ -170,7 +176,10 @@ impl ScaffoldDescription {
                     }),
                     opts.passphrase_needed,
                 )?;
-                template_path = tmp_dir.to_string_lossy().to_string();
+                template_path = match opts.repository_template_path {
+                    Some(sub_path) => tmp_dir.join(sub_path).to_string_lossy().to_string(),
+                    None => tmp_dir.to_string_lossy().to_string(),
+                };
             }
             let mut scaffold_file =
                 File::open(PathBuf::from(&template_path).join(SCAFFOLD_FILENAME))
