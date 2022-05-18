@@ -54,10 +54,17 @@ OPTIONS:
     -n, --name <name>
             Specify the name of your generated project (and so skip the prompt asking for it)
 
+    -k, --private_key_path <private-key-path>
+            Specify if your private SSH key is located in another location than $HOME/.ssh/id_rsa
+
+    -r, --path <repository_template_path>
+            Specifiy your template location in the repository if it's not located at the root of your repository
+
     -d, --target-directory <target-directory>    Specifiy the target directory
 
 ARGS:
     <template>    Specifiy your template location
+
 ```
 
 ## Write your own template
