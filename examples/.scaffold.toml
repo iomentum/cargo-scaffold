@@ -5,24 +5,16 @@ author = "Benjamin Coenen <5719034+bnjjj@users.noreply.github.com>"
 version = "0.1.0"
 # Exclude path
 exclude = [
-    "./target",
-    "./examples/do_not_template_this.txt"
+    "./target"
+]
+
+disable_templating = [
+    "./do_not_template_this.txt"
 ]
 # Notes to display at the end of the generation
 notes = """
-Have fun using this template called {{name}} ! Here is the description: {{description}} 
+Have fun using this sub-template called {{name}} ! Here is the description: {{description}} 
 """
-
-[hooks]
-# Commands to be executed before scaffolding, from within the generated project
-pre = [
-    "bash -c some_pre_script.sh"
-]
-# Commands to be executed after scaffolding, from within the generated project
-post = [
-    "cargo vendor",
-    "bash -c some_post_script.sh"
-]
 
 [parameters]
     # parameters.name is forbidden

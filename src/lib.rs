@@ -47,6 +47,7 @@ pub struct ScaffoldDescription {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TemplateDescription {
     exclude: Option<Vec<String>>,
+    disable_templating: Option<Vec<String>>,
     notes: Option<String>,
 }
 
@@ -345,7 +346,18 @@ impl ScaffoldDescription {
             Some(exclude) => {
                 let mut builder = GlobSetBuilder::new();
                 for ex in exclude {
-                    builder.add(Glob::new(ex)?);
+                    builder.add(Glob::new(ex.trim_start_matches("./"))?);
+                }
+
+                builder.build()?
+            }
+            None => GlobSetBuilder::new().build()?,
+        };
+        let disable_templating = match &self.template.disable_templating {
+            Some(exclude) => {
+                let mut builder = GlobSetBuilder::new();
+                for ex in exclude {
+                    builder.add(Glob::new(ex.trim_start_matches("./"))?);
                 }
 
                 builder.build()?
@@ -423,6 +435,7 @@ impl ScaffoldDescription {
         for entry in entries {
             let entry = entry.map_err(|e| anyhow!("cannot read entry : {}", e))?;
             let entry_path = entry.path().strip_prefix(&self.template_path)?;
+
             if entry_path == PathBuf::from("") {
                 continue;
             }
@@ -440,34 +453,41 @@ impl ScaffoldDescription {
             {
                 let mut file =
                     File::open(filename).map_err(|e| anyhow!("cannot open file : {}", e))?;
+                // TODO add the ability to read a non string file
                 file.read_to_string(&mut content)
-                    .map_err(|e| anyhow!("cannot read file : {}", e))?;
+                    .map_err(|e| anyhow!("cannot read file {filename:?} : {}", e))?;
             }
-            let rendered_content = template_engine
-                .render_template(&content, &parameters)
-                .map_err(|e| anyhow!("cannot render template : {}", e))?;
-            let rendered_path = template_engine
-                .render_template(
-                    dir_path
-                        .join(entry_path)
-                        .to_str()
-                        .expect("path is not utf8 valid"),
-                    &parameters,
+            let (path, content) = if disable_templating.is_match(entry_path) {
+                (
+                    dir_path.join(entry_path).to_string_lossy().to_string(),
+                    content,
                 )
-                .map_err(|e| anyhow!("cannot render template for path : {}", e))?;
+            } else {
+                let rendered_content = template_engine
+                    .render_template(&content, &parameters)
+                    .map_err(|e| anyhow!("cannot render template : {}", e))?;
+                let rendered_path = template_engine
+                    .render_template(
+                        dir_path
+                            .join(entry_path)
+                            .to_str()
+                            .expect("path is not utf8 valid"),
+                        &parameters,
+                    )
+                    .map_err(|e| anyhow!("cannot render template for path : {}", e))?;
+
+                (rendered_path, rendered_content)
+            };
+
             let permissions = entry
                 .metadata()
                 .map_err(|e| anyhow!("cannot get metadata for path : {}", e))?
                 .permissions();
 
-            let mut file = OpenOptions::new()
-                .write(true)
-                .create(true)
-                .open(&rendered_path)?;
-            file.set_permissions(permissions).map_err(|e| {
-                anyhow!("cannot set permission to file '{}' : {}", rendered_path, e)
-            })?;
-            file.write_all(rendered_content.as_bytes())
+            let mut file = OpenOptions::new().write(true).create(true).open(&path)?;
+            file.set_permissions(permissions)
+                .map_err(|e| anyhow!("cannot set permission to file '{}' : {}", path, e))?;
+            file.write_all(content.as_bytes())
                 .map_err(|e| anyhow!("cannot create file : {}", e))?;
         }
 
