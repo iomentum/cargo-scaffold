@@ -2,7 +2,7 @@
 
 `cargo-scaffold` is a flexible and easy-to-use developper tool to let you scaffold a project. It's fully configurable without writing any line of code. It generates any kind of projects with a developer friendly CLI.
 
-<p align="center"><img src="./logo.svg?raw=true" style="width: 35%; height: 35%;" /></p>
+<p align="center"><img src="https://github.com/iomentum/cargo-scaffold/raw/master/logo.svg?raw=true" style="width: 35%; height: 35%;" /></p>
 
 ## Features
 
@@ -11,11 +11,11 @@
 - User interactions automatically generated
 - Not only for Rust crate/project. It's completely language agnostic
 
-<p align="center"><img src="./preview.gif?raw=true"/></p>
+<p align="center"><img src="https://github.com/iomentum/cargo-scaffold/raw/master/preview.gif?raw=true"/></p>
 
 ## Installation
 
-```
+```bash
 cargo install cargo-scaffold
 ```
 
@@ -23,7 +23,7 @@ cargo install cargo-scaffold
 
 You can scaffold your project from any `cargo-template` scaffold located locally in a directory or in a git repository
 
-```
+```bash
 # Locally
 cargo scaffold your_template_dir
 
@@ -36,7 +36,7 @@ cargo scaffold https://github.com/username/template.git deed14dcbf17ba87f6659ea0
 
 Here are the available options for `cargo scaffold`:
 
-```
+```text
 USAGE:
     cargo-scaffold scaffold [FLAGS] [OPTIONS] <template>
 
@@ -143,7 +143,7 @@ Here is the list of different types you can use for your parameter: `string`, `i
 
 In any files inside your template's directory you can use [Handlebars templating](https://handlebarsjs.com/guide/). Please refer to that documentation for all the syntax about templating. If you're looking for custom helpers in Handlerbars you can check the [documentation here](https://github.com/davidB/handlebars_misc_helpers). Here is a basic example if you want to display the parameter named `description` and if the boolean parameter `show_description` is set to `true` as described in the previous section.
 
-```
+```text
 {{#if show_description}} {{description}} {{/if}}
 {{#forRange 5}}
 Repeat this line 5 times with the current {{@index}}{{/forRange}}
