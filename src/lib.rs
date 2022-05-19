@@ -23,12 +23,13 @@ use handlebars::Handlebars;
 use helpers::ForRangHelper;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
-use toml::Value;
 use walkdir::WalkDir;
 
-const SCAFFOLD_FILENAME: &str = ".scaffold.toml";
+pub use toml::Value;
+pub const SCAFFOLD_FILENAME: &str = ".scaffold.toml";
+pub type PopulateParamsCallback = Box<dyn for<'a> Fn(&'a mut BTreeMap<String, Value>)>;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize)]
 pub struct ScaffoldDescription {
     template: TemplateDescription,
     parameters: Option<BTreeMap<String, Parameter>>,
@@ -43,6 +44,8 @@ pub struct ScaffoldDescription {
     append: bool,
     #[serde(skip)]
     project_name: Option<String>,
+    #[serde(skip)]
+    populate_parameters: Option<PopulateParamsCallback>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -86,7 +89,7 @@ pub enum Cargo {
     Scaffold(Opts),
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(StructOpt)]
 pub struct Opts {
     /// Specifiy your template location
     #[structopt(name = "template", required = true)]
@@ -208,6 +211,15 @@ impl ScaffoldDescription {
         self.parameters.as_ref()
     }
 
+    /// Be able to populate parameters after the users has filled their parameters
+    pub fn populate_parameters<F>(&mut self, cb: F) -> &Self
+    where
+        for<'a> F: Fn(&'a mut BTreeMap<String, Value>) + 'static,
+    {
+        self.populate_parameters = Some(Box::new(cb));
+        self
+    }
+
     fn create_dir(&self, name: &str) -> Result<PathBuf> {
         let mut dir_path = self
             .target_dir
@@ -215,7 +227,9 @@ impl ScaffoldDescription {
             .unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| ".".into()));
 
         let cyan = Style::new().cyan();
-        dir_path = dir_path.join(name);
+        if self.target_dir.is_none() {
+            dir_path = dir_path.join(name);
+        }
         if dir_path.exists() {
             if !self.force && !self.append {
                 return Err(anyhow!(
@@ -255,7 +269,8 @@ impl ScaffoldDescription {
         Ok(path)
     }
 
-    fn fetch_parameters_value(&self) -> Result<BTreeMap<String, Value>> {
+    /// Launch prompt to the user to ask for different parameters
+    pub fn fetch_parameters_value(&self) -> Result<BTreeMap<String, Value>> {
         let mut parameters: BTreeMap<String, Value> = BTreeMap::new();
 
         if let Some(parameter_list) = self.parameters.clone() {
@@ -324,6 +339,9 @@ impl ScaffoldDescription {
                 };
                 parameters.insert(parameter_name, value);
             }
+        }
+        if let Some(populate_parameters) = &self.populate_parameters {
+            populate_parameters(&mut parameters);
         }
 
         Ok(parameters)

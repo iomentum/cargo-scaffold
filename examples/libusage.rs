@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, path::PathBuf};
+use std::path::PathBuf;
 
 use anyhow::Result;
 use cargo_scaffold::{Opts, ScaffoldDescription};
@@ -11,7 +11,12 @@ fn main() -> Result<()> {
             "https://github.com/Cosmian/mpc_rust_template.git",
         ))
         .build();
-    let mut params = BTreeMap::new();
-    params.insert("players_nb".to_string(), Value::Integer(3));
-    ScaffoldDescription::new(opts)?.scaffold_with_parameters(params)
+    // let mut params = BTreeMap::new();
+    // params.insert("players_nb".to_string(), Value::Integer(3));
+    ScaffoldDescription::new(opts)?
+        .populate_parameters(|params| {
+            params.insert("players_nb".to_string(), Value::Integer(3));
+        })
+        .scaffold()
+    // .scaffold_with_parameters(params)
 }
