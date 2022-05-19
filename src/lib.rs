@@ -430,7 +430,7 @@ impl ScaffoldDescription {
                     return false;
                 }
 
-                if entry.file_name() == SCAFFOLD_FILENAME {
+                if entry.depth() == 1 && entry.file_name() == SCAFFOLD_FILENAME {
                     return false;
                 }
 
@@ -490,7 +490,7 @@ impl ScaffoldDescription {
             } else {
                 let rendered_content = template_engine
                     .render_template(&content, &parameters)
-                    .map_err(|e| anyhow!("cannot render template : {}", e))?;
+                    .map_err(|e| anyhow!("cannot render template : {}, {}", entry_path.to_str().unwrap_or_default(), e))?;
                 let rendered_path = template_engine
                     .render_template(
                         dir_path
