@@ -41,7 +41,7 @@ USAGE:
     cargo-scaffold scaffold [FLAGS] [OPTIONS] <template>
 
 FLAGS:
-    -a, --append        Append files in the existing directory, do not create directory with the project name
+    -a, --append        Append files in the target directory, create directory with the project name if it doesn't already exist but doesn't overwrite existing file (use force for that kind of usage)
     -f, --force         Override target directory if it exists
     -h, --help          Prints help information
     -p, --passphrase    Specify if your SSH key is protected by a passphrase

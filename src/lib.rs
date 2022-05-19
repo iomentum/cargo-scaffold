@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 mod git;
 mod helpers;
 
@@ -112,7 +113,7 @@ pub struct Opts {
     #[structopt(short = "f", long = "force")]
     pub force: bool,
 
-    /// Append files in the existing directory, do not create directory with the project name
+    /// Append files in the target directory, create directory with the project name if it doesn't already exist but doesn't overwrite existing file (use force for that kind of usage)
     #[structopt(short = "a", long = "append")]
     pub append: bool,
 
@@ -214,43 +215,41 @@ impl ScaffoldDescription {
             .unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| ".".into()));
 
         let cyan = Style::new().cyan();
-        if !self.append {
-            dir_path = dir_path.join(name);
-            if dir_path.exists() {
-                if !self.force {
-                    return Err(anyhow!(
-                        "cannot create {} because it already exists",
-                        dir_path.to_string_lossy()
-                    ));
-                } else {
-                    println!(
-                        "{} {}",
-                        Emoji("🔄", ""),
-                        cyan.apply_to("Override directory…"),
-                    );
-                    fs::remove_dir_all(&dir_path).with_context(|| "Cannot remove directory")?;
-                }
-            } else {
+        dir_path = dir_path.join(name);
+        if dir_path.exists() {
+            if !self.force && !self.append {
+                return Err(anyhow!(
+                    "cannot create {} because it already exists",
+                    dir_path.to_string_lossy()
+                ));
+            } else if self.force {
+                println!(
+                    "{} {}",
+                    Emoji("🔄", ""),
+                    cyan.apply_to("Override directory…"),
+                );
+                fs::remove_dir_all(&dir_path).with_context(|| "Cannot remove directory")?;
+            } else if self.append {
                 println!(
                     "{} {}",
                     Emoji("🔄", ""),
                     cyan.apply_to(format!(
-                        "Creating directory {}…",
+                        "Append to directory {}…",
                         dir_path.to_string_lossy()
                     )),
                 );
             }
-            fs::create_dir_all(&dir_path).with_context(|| "Cannot create directory")?;
         } else {
             println!(
                 "{} {}",
                 Emoji("🔄", ""),
                 cyan.apply_to(format!(
-                    "Append to directory {}…",
+                    "Creating directory {}…",
                     dir_path.to_string_lossy()
                 )),
             );
         }
+        fs::create_dir_all(&dir_path).with_context(|| "Cannot create directory")?;
         let path = fs::canonicalize(dir_path).with_context(|| "Cannot canonicalize path")?;
 
         Ok(path)
@@ -443,6 +442,14 @@ impl ScaffoldDescription {
                 if entry.path().to_str() == Some(".") {
                     continue;
                 }
+                let dir_path_to_create = dir_path.join(entry_path);
+                if dir_path_to_create.exists() && self.force {
+                    fs::remove_dir_all(&dir_path_to_create)
+                        .with_context(|| "Cannot remove directory")?;
+                }
+                if dir_path_to_create.exists() && self.append {
+                    continue;
+                }
                 fs::create_dir(dir_path.join(entry_path))
                     .map_err(|e| anyhow!("cannot create dir : {}", e))?;
                 continue;
@@ -478,6 +485,12 @@ impl ScaffoldDescription {
 
                 (rendered_path, rendered_content)
             };
+
+            let filename_path = PathBuf::from(&path);
+            // We skip the file if the file already exist and if we are in an append mode
+            if filename_path.exists() && !self.force && self.append {
+                continue;
+            }
 
             let permissions = entry
                 .metadata()
