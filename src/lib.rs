@@ -490,7 +490,7 @@ impl ScaffoldDescription {
             } else {
                 let rendered_content = template_engine
                     .render_template(&content, &parameters)
-                    .map_err(|e| anyhow!("cannot render template : {}, {}", entry_path.to_str().unwrap_or_default(), e))?;
+                    .map_err(|e| anyhow!("cannot render template {entry_path:?} : {}", e))?;
                 let rendered_path = template_engine
                     .render_template(
                         dir_path
@@ -499,7 +499,7 @@ impl ScaffoldDescription {
                             .expect("path is not utf8 valid"),
                         &parameters,
                     )
-                    .map_err(|e| anyhow!("cannot render template for path : {}", e))?;
+                    .map_err(|e| anyhow!("cannot render template for path {entry_path:?} : {}", e))?;
 
                 (rendered_path, rendered_content)
             };
