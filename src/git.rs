@@ -1,12 +1,12 @@
 use anyhow::Result;
 use console::{Emoji, Style};
 use dialoguer::Password;
-use git2::{Cred, Oid, RemoteCallbacks, Repository};
+use git2::{Cred, RemoteCallbacks};
 use std::path::Path;
 
 pub(crate) fn clone(
     repository: &str,
-    commit_opt: &Option<String>,
+    reference_opt: &Option<String>,
     target_dir: &Path,
     private_key_path: &Path,
     passphrase_needed: bool,
@@ -17,9 +17,8 @@ pub(crate) fn clone(
         Emoji("🔄", ""),
         cyan.apply_to("Cloning repository…"),
     );
-    let repo = if repository.contains("http") {
-        Repository::clone(repository, &target_dir)?
-    } else {
+    let mut fetch_options = git2::FetchOptions::new();
+    if !repository.starts_with("http") {
         let mut callbacks = RemoteCallbacks::new();
         let passphrase = if passphrase_needed {
             Password::new()
@@ -40,25 +39,31 @@ pub(crate) fn clone(
         });
 
         // Prepare fetch options.
-        let mut fo = git2::FetchOptions::new();
-        fo.remote_callbacks(callbacks);
+        fetch_options.remote_callbacks(callbacks);
+    }
 
-        // Prepare builder.
-        let mut builder = git2::build::RepoBuilder::new();
-        builder.fetch_options(fo);
+    if reference_opt.is_some() {
+        fetch_options.download_tags(git2::AutotagOption::All);
+    }
 
-        // Clone the project.
-        builder.clone(repository, target_dir)?
-    };
+    // Prepare builder.
+    let mut builder = git2::build::RepoBuilder::new();
+    builder.fetch_options(fetch_options);
 
-    // move cloned repo to specified commit
-    if let Some(commit) = commit_opt {
-        let oid = Oid::from_str(commit)?;
-        let commit_obj = repo.find_commit(oid)?;
-        let _branch = repo.branch(commit, &commit_obj, false)?;
-        let obj = repo.revparse_single(&("refs/heads/".to_owned() + commit))?;
+    // Clone the project.
+    let repo = builder.clone(repository, target_dir)?;
+    println!("target_dir -- {target_dir:?}");
+
+    // Either a git tag, commit
+    if let Some(git_reference) = reference_opt {
+        let (obj, reference) = repo.revparse_ext(git_reference)?;
         repo.checkout_tree(&obj, None)?;
-        repo.set_head(&("refs/heads/".to_owned() + commit))?;
+        match reference {
+            // tagref is an actual reference like branches or tags
+            Some(reporef) => repo.set_head(reporef.name().expect("tag has a name; qed")),
+            // this is a commit, not a reference
+            None => repo.set_head_detached(obj.id()),
+        }?;
     }
 
     Ok(())

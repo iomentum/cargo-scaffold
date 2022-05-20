@@ -99,17 +99,17 @@ pub struct Opts {
     #[structopt(name = "repository_template_path", short = "r", long = "path")]
     pub repository_template_path: Option<PathBuf>,
 
-    /// Full commit hash from which the template is cloned
-    /// (i.e.: "deed14dcbf17ba87f6659ea05755cf94cb1464ab")
-    #[structopt(name = "commit", short = "c", long = "commit")]
-    pub template_commit: Option<String>,
+    /// Full commit hash or tag from which the template is cloned
+    /// (i.e.: "deed14dcbf17ba87f6659ea05755cf94cb1464ab" or "v0.5.0")
+    #[structopt(name = "git_ref", short = "t", long = "git_ref")]
+    pub git_ref: Option<String>,
 
     /// Specify the name of your generated project (and so skip the prompt asking for it)
     #[structopt(name = "name", short = "n", long = "name")]
     pub project_name: Option<String>,
 
     /// Specifiy the target directory
-    #[structopt(name = "target-directory", short = "d", long = "target-directory")]
+    #[structopt(name = "target_directory", short = "d", long = "target_directory")]
     pub target_dir: Option<PathBuf>,
 
     /// Override target directory if it exists
@@ -137,7 +137,7 @@ impl Opts {
     pub fn new(
         template_path: PathBuf,
         repository_template_path: Option<PathBuf>,
-        template_commit: Option<String>,
+        git_ref: Option<String>,
         project_name: Option<String>,
         target_dir: Option<PathBuf>,
         force: Option<bool>,
@@ -148,7 +148,7 @@ impl Opts {
         Self {
             template_path,
             repository_template_path,
-            template_commit,
+            git_ref,
             project_name,
             target_dir,
             force: force.unwrap_or_default(),
@@ -171,7 +171,7 @@ impl ScaffoldDescription {
                 fs::create_dir_all(&tmp_dir)?;
                 clone(
                     &template_path,
-                    &opts.template_commit,
+                    &opts.git_ref,
                     &tmp_dir,
                     &opts.private_key_path.unwrap_or_else(|| {
                         PathBuf::from(&format!(
@@ -499,7 +499,9 @@ impl ScaffoldDescription {
                             .expect("path is not utf8 valid"),
                         &parameters,
                     )
-                    .map_err(|e| anyhow!("cannot render template for path {entry_path:?} : {}", e))?;
+                    .map_err(|e| {
+                        anyhow!("cannot render template for path {entry_path:?} : {}", e)
+                    })?;
 
                 (rendered_path, rendered_content)
             };

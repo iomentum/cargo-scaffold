@@ -31,7 +31,7 @@ cargo scaffold your_template_dir
 cargo scaffold https://github.com/username/template.git
 
 # From git repository based on a specific commit
-cargo scaffold https://github.com/username/template.git deed14dcbf17ba87f6659ea05755cf94cb1464ab
+cargo scaffold https://github.com/username/template.git -t deed14dcbf17ba87f6659ea05755cf94cb1464ab
 ```
 
 Here are the available options for `cargo scaffold`:
@@ -41,16 +41,17 @@ USAGE:
     cargo-scaffold scaffold [FLAGS] [OPTIONS] <template>
 
 FLAGS:
-    -a, --append        Append files in the target directory, create directory with the project name if it doesn't already exist but doesn't overwrite existing file (use force for that kind of usage)
+    -a, --append        Append files in the target directory, create directory with the project name if it doesn't
+                        already exist but doesn't overwrite existing file (use force for that kind of usage)
     -f, --force         Override target directory if it exists
     -h, --help          Prints help information
     -p, --passphrase    Specify if your SSH key is protected by a passphrase
     -V, --version       Prints version information
 
 OPTIONS:
-    -c, --commit <commit>
-            Full commit hash from which the template is cloned (i.e.: "deed14dcbf17ba87f6659ea05755cf94cb1464ab")
-
+    -t, --git_ref <git_ref>
+            Full commit hash or tag from which the template is cloned (i.e.: "deed14dcbf17ba87f6659ea05755cf94cb1464ab"
+            or "v0.5.0")
     -n, --name <name>
             Specify the name of your generated project (and so skip the prompt asking for it)
 
@@ -60,11 +61,10 @@ OPTIONS:
     -r, --path <repository_template_path>
             Specifiy your template location in the repository if it's not located at the root of your repository
 
-    -d, --target-directory <target-directory>    Specifiy the target directory
+    -d, --target_directory <target_directory>    Specifiy the target directory
 
 ARGS:
     <template>    Specifiy your template location
-
 ```
 
 ## Write your own template
