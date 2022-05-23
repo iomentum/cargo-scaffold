@@ -429,6 +429,7 @@ impl ScaffoldDescription {
 
         let mut template_engine = Handlebars::new();
         template_engine.set_strict_mode(false);
+        #[cfg(feature = "helpers")]
         handlebars_misc_helpers::setup_handlebars(&mut template_engine);
         template_engine.register_helper("forRange", Box::new(ForRangHelper));
 
