@@ -13,10 +13,9 @@ fn main() -> Result<()> {
         .build();
     // let mut params = BTreeMap::new();
     // params.insert("players_nb".to_string(), Value::Integer(3));
-    ScaffoldDescription::new(opts)?
-        .populate_parameters(|params| {
-            params.insert("players_nb".to_string(), Value::Integer(3));
-        })
-        .scaffold()
+    let scaffold_desc = ScaffoldDescription::new(opts)?;
+    let mut params = scaffold_desc.fetch_parameters_value()?;
+    params.insert("players_nb".to_string(), Value::Integer(3));
+    scaffold_desc.scaffold_with_parameters(params)
     // .scaffold_with_parameters(params)
 }

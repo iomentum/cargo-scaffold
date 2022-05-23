@@ -27,7 +27,6 @@ use walkdir::WalkDir;
 
 pub use toml::Value;
 pub const SCAFFOLD_FILENAME: &str = ".scaffold.toml";
-pub type PopulateParamsCallback = Box<dyn for<'a> Fn(&'a mut BTreeMap<String, Value>)>;
 
 #[derive(Serialize, Deserialize)]
 pub struct ScaffoldDescription {
@@ -44,8 +43,6 @@ pub struct ScaffoldDescription {
     append: bool,
     #[serde(skip)]
     project_name: Option<String>,
-    #[serde(skip)]
-    populate_parameters: Option<PopulateParamsCallback>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -211,15 +208,6 @@ impl ScaffoldDescription {
         self.parameters.as_ref()
     }
 
-    /// Be able to populate parameters after the users has filled their parameters
-    pub fn populate_parameters<F>(&mut self, cb: F) -> &Self
-    where
-        for<'a> F: Fn(&'a mut BTreeMap<String, Value>) + 'static,
-    {
-        self.populate_parameters = Some(Box::new(cb));
-        self
-    }
-
     fn create_dir(&self, name: &str) -> Result<PathBuf> {
         let mut dir_path = self
             .target_dir
@@ -339,9 +327,6 @@ impl ScaffoldDescription {
                 };
                 parameters.insert(parameter_name, value);
             }
-        }
-        if let Some(populate_parameters) = &self.populate_parameters {
-            populate_parameters(&mut parameters);
         }
 
         Ok(parameters)
