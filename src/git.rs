@@ -52,7 +52,6 @@ pub(crate) fn clone(
 
     // Clone the project.
     let repo = builder.clone(repository, target_dir)?;
-    println!("target_dir -- {target_dir:?}");
 
     // Either a git tag, commit
     if let Some(git_reference) = reference_opt {
