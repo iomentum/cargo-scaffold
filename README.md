@@ -54,14 +54,14 @@ OPTIONS:
             or "v0.5.0")
     -n, --name <name>
             Specify the name of your generated project (and so skip the prompt asking for it)
-
+        --param <parameters>...                  Supply parameters via the command line in <name>=<value> format
     -k, --private_key_path <private-key-path>
             Specify if your private SSH key is located in another location than $HOME/.ssh/id_rsa
 
     -r, --path <repository_template_path>
             Specifiy your template location in the repository if it's not located at the root of your repository
 
-    -d, --target_directory <target_directory>    Specifiy the target directory
+    -d, --target_directory <target_directory>    Specify the target directory
 
 ARGS:
     <template>    Specifiy your template location

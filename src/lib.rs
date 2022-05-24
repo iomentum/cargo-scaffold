@@ -127,9 +127,9 @@ pub struct Opts {
     #[structopt(short = "k", long = "private_key_path")]
     pub private_key_path: Option<PathBuf>,
 
-    /// Supply parameters via the command line
+    /// Supply parameters via the command line in <name>=<value> format
     #[structopt(long = "param")]
-    pub default_parameters: Vec<String>,
+    pub parameters: Vec<String>,
 }
 
 #[buildstructor::buildstructor]
@@ -147,7 +147,7 @@ impl Opts {
         append: Option<bool>,
         passphrase_needed: Option<bool>,
         private_key_path: Option<PathBuf>,
-        default_parameters: Vec<String>,
+        parameters: Vec<String>,
     ) -> Opts {
         Self {
             template_path,
@@ -159,7 +159,7 @@ impl Opts {
             append: append.unwrap_or_default(),
             passphrase_needed: passphrase_needed.unwrap_or_default(),
             private_key_path,
-            default_parameters,
+            parameters,
         }
     }
 }
@@ -167,7 +167,7 @@ impl Opts {
 impl ScaffoldDescription {
     pub fn new(opts: Opts) -> Result<Self> {
         let mut default_parameters = BTreeMap::new();
-        for param in opts.default_parameters {
+        for param in opts.parameters {
             let split = param.splitn(2, '=').collect::<Vec<_>>();
             if split.len() != 2 {
                 return Err(anyhow!("invalid argument: {}", param));
