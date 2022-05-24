@@ -43,6 +43,8 @@ pub struct ScaffoldDescription {
     append: bool,
     #[serde(skip)]
     project_name: Option<String>,
+    #[serde(skip)]
+    default_parameters: BTreeMap<String, Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -124,6 +126,10 @@ pub struct Opts {
     /// Specify if your private SSH key is located in another location than $HOME/.ssh/id_rsa
     #[structopt(short = "k", long = "private_key_path")]
     pub private_key_path: Option<PathBuf>,
+
+    /// Supply parameters via the command line in <name>=<value> format
+    #[structopt(long = "param")]
+    pub parameters: Vec<String>,
 }
 
 #[buildstructor::buildstructor]
@@ -141,6 +147,7 @@ impl Opts {
         append: Option<bool>,
         passphrase_needed: Option<bool>,
         private_key_path: Option<PathBuf>,
+        parameters: Vec<String>,
     ) -> Opts {
         Self {
             template_path,
@@ -152,12 +159,21 @@ impl Opts {
             append: append.unwrap_or_default(),
             passphrase_needed: passphrase_needed.unwrap_or_default(),
             private_key_path,
+            parameters,
         }
     }
 }
 
 impl ScaffoldDescription {
     pub fn new(opts: Opts) -> Result<Self> {
+        let mut default_parameters = BTreeMap::new();
+        for param in opts.parameters {
+            let split = param.splitn(2, '=').collect::<Vec<_>>();
+            if split.len() != 2 {
+                return Err(anyhow!("invalid argument: {}", param));
+            }
+            default_parameters.insert(split[0].to_string(), Value::String(split[1].to_string()));
+        }
         let mut template_path = opts.template_path.to_string_lossy().to_string();
         let mut scaffold_desc: ScaffoldDescription = {
             if template_path.ends_with(".git") {
@@ -196,6 +212,7 @@ impl ScaffoldDescription {
         scaffold_desc.template_path = PathBuf::from(template_path);
         scaffold_desc.project_name = opts.project_name;
         scaffold_desc.append = opts.append;
+        scaffold_desc.default_parameters = default_parameters;
 
         Ok(scaffold_desc)
     }
@@ -259,91 +276,124 @@ impl ScaffoldDescription {
 
     /// Launch prompt to the user to ask for different parameters
     pub fn fetch_parameters_value(&self) -> Result<BTreeMap<String, Value>> {
-        let mut parameters: BTreeMap<String, Value> = BTreeMap::new();
-
-        if let Some(parameter_list) = self.parameters.clone() {
-            for (parameter_name, parameter) in parameter_list {
-                let value: Value = match parameter.r#type {
-                    ParameterType::String => {
-                        Value::String(Input::new().with_prompt(parameter.message).interact()?)
-                    }
-                    ParameterType::Float => Value::Float(
-                        Input::<f64>::new()
-                            .with_prompt(parameter.message)
-                            .interact()?,
-                    ),
-                    ParameterType::Integer => Value::Integer(
-                        Input::<i64>::new()
-                            .with_prompt(parameter.message)
-                            .interact()?,
-                    ),
-                    ParameterType::Boolean => {
-                        Value::Boolean(Confirm::new().with_prompt(parameter.message).interact()?)
-                    }
-                    ParameterType::Select => {
-                        let idx_selected = Select::new()
-                            .items(
-                                parameter
-                                    .values
-                                    .as_ref()
-                                    .expect("cannot make a select parameter with empty values"),
-                            )
-                            .with_prompt(parameter.message)
-                            .default(0)
-                            .interact()?;
-                        parameter
-                            .values
-                            .as_ref()
-                            .expect("cannot make a select parameter with empty values")
-                            .get(idx_selected)
-                            .unwrap()
-                            .clone()
-                    }
-                    ParameterType::MultiSelect => {
-                        let idxs_selected = MultiSelect::new()
-                            .items(
-                                parameter
-                                    .values
-                                    .as_ref()
-                                    .expect("cannot make a select parameter with empty values"),
-                            )
-                            .with_prompt(parameter.message.clone())
-                            .interact()?;
-                        let values = idxs_selected
-                            .into_iter()
-                            .map(|idx| {
-                                parameter
-                                    .values
-                                    .as_ref()
-                                    .expect("cannot make a select parameter with empty values")
-                                    .get(idx)
-                                    .unwrap()
-                                    .clone()
-                            })
-                            .collect();
-
-                        Value::Array(values)
-                    }
-                };
-                parameters.insert(parameter_name, value);
+        let mut parameters: BTreeMap<String, Value> = self.default_parameters.clone();
+        let mut parameter_list = self
+            .parameters
+            .clone()
+            .unwrap_or_default()
+            .into_iter()
+            .collect::<Vec<_>>();
+        if let None = self.parameters.clone().unwrap_or_default().get("name") {
+            parameter_list.insert(
+                0,
+                (
+                    "name".to_string(),
+                    Parameter {
+                        message: "What is the name of your generated project ?".to_string(),
+                        required: true,
+                        r#type: ParameterType::String,
+                        default: None,
+                        values: None,
+                        tags: None,
+                    },
+                ),
+            );
+        }
+        for (parameter_name, parameter) in parameter_list {
+            if parameters.contains_key(&parameter_name) {
+                continue;
             }
+
+            let value: Value = match parameter.r#type {
+                ParameterType::String => {
+                    Value::String(Input::new().with_prompt(parameter.message).interact()?)
+                }
+                ParameterType::Float => Value::Float(
+                    Input::<f64>::new()
+                        .with_prompt(parameter.message)
+                        .interact()?,
+                ),
+                ParameterType::Integer => Value::Integer(
+                    Input::<i64>::new()
+                        .with_prompt(parameter.message)
+                        .interact()?,
+                ),
+                ParameterType::Boolean => {
+                    Value::Boolean(Confirm::new().with_prompt(parameter.message).interact()?)
+                }
+                ParameterType::Select => {
+                    let idx_selected = Select::new()
+                        .items(
+                            parameter
+                                .values
+                                .as_ref()
+                                .expect("cannot make a select parameter with empty values"),
+                        )
+                        .with_prompt(parameter.message)
+                        .default(0)
+                        .interact()?;
+                    parameter
+                        .values
+                        .as_ref()
+                        .expect("cannot make a select parameter with empty values")
+                        .get(idx_selected)
+                        .unwrap()
+                        .clone()
+                }
+                ParameterType::MultiSelect => {
+                    let idxs_selected = MultiSelect::new()
+                        .items(
+                            parameter
+                                .values
+                                .as_ref()
+                                .expect("cannot make a select parameter with empty values"),
+                        )
+                        .with_prompt(parameter.message.clone())
+                        .interact()?;
+                    let values = idxs_selected
+                        .into_iter()
+                        .map(|idx| {
+                            parameter
+                                .values
+                                .as_ref()
+                                .expect("cannot make a select parameter with empty values")
+                                .get(idx)
+                                .unwrap()
+                                .clone()
+                        })
+                        .collect();
+
+                    Value::Array(values)
+                }
+            };
+            parameters.insert(parameter_name, value);
         }
 
         Ok(parameters)
     }
 
-    // Scaffold the project with the template
+    /// Scaffold the project with the template
     pub fn scaffold(&self) -> Result<()> {
-        self.internal_scaffold(None)
+        let mut parameters = self.default_parameters.clone();
+        parameters.append(&mut self.fetch_parameters_value()?);
+        self.internal_scaffold(parameters)
     }
 
     /// Scaffold the project with the given parameters defined in the .scaffold.toml without prompting any inputs
     /// It's a non-interactive mode
-    pub fn scaffold_with_parameters(&self, parameters: BTreeMap<String, Value>) -> Result<()> {
-        self.internal_scaffold(parameters.into())
+    pub fn scaffold_with_parameters(&self, mut parameters: BTreeMap<String, Value>) -> Result<()> {
+        let mut default_parameters = self.default_parameters.clone();
+        if let Some(name) = &self.project_name {
+            parameters.insert("name".to_string(), Value::String(name.clone()));
+        } else {
+            return Err(anyhow!("project_name must be set"));
+        }
+
+        default_parameters.append(&mut parameters);
+        self.internal_scaffold(default_parameters)
     }
 
-    fn internal_scaffold(&self, parameters: Option<BTreeMap<String, Value>>) -> Result<()> {
+    fn internal_scaffold(&self, mut parameters: BTreeMap<String, Value>) -> Result<()> {
         let excludes = match &self.template.exclude {
             Some(exclude) => {
                 let mut builder = GlobSetBuilder::new();
@@ -367,17 +417,10 @@ impl ScaffoldDescription {
             None => GlobSetBuilder::new().build()?,
         };
 
-        let mut parameters: BTreeMap<String, Value> = match parameters {
-            Some(params) => params,
-            None => self.fetch_parameters_value()?,
-        };
-
-        let name: String = match &self.project_name {
-            Some(project_name) => project_name.clone(),
-            None => Input::new()
-                .with_prompt("What is the name of your generated project ?")
-                .interact()?,
-        };
+        let name = parameters
+            .get("name")
+            .expect("project name must have been set. qed")
+            .to_string();
         let dir_path = self.create_dir(&name)?;
         parameters.insert(
             "target_dir".to_string(),
@@ -401,7 +444,6 @@ impl ScaffoldDescription {
             }
         }
 
-        parameters.insert("name".to_string(), Value::String(name.clone()));
         // List entries inside directory
         let entries = WalkDir::new(&self.template_path)
             .into_iter()
