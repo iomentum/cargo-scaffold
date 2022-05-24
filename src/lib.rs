@@ -420,6 +420,8 @@ impl ScaffoldDescription {
         let name = parameters
             .get("name")
             .expect("project name must have been set. qed")
+            .as_str()
+            .expect("project name must be a string")
             .to_string();
         let dir_path = self.create_dir(&name)?;
         parameters.insert(
