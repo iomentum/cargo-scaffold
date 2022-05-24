@@ -59,12 +59,12 @@ OPTIONS:
             Specify if your private SSH key is located in another location than $HOME/.ssh/id_rsa
 
     -r, --path <repository_template_path>
-            Specifiy your template location in the repository if it's not located at the root of your repository
+            Specify your template location in the repository if it's not located at the root of your repository
 
     -d, --target_directory <target_directory>    Specify the target directory
 
 ARGS:
-    <template>    Specifiy your template location
+    <template>    Specify your template location
 ```
 
 ## Write your own template
