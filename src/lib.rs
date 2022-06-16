@@ -640,6 +640,7 @@ impl ScaffoldDescription {
     }
 }
 
+#[cfg(windows)]
 fn render_path(
     template_engine: &mut Handlebars,
     path_to_render: &str,
@@ -658,6 +659,18 @@ fn render_path(
 
     Ok(rendered_path.replace(replace_sequence, "\\"))
 }
+
+#[cfg(not(windows))]
+fn render_path(
+    template_engine: &mut Handlebars,
+    path_to_render: &str,
+    parameters: &BTreeMap<String, Value>,
+) -> Result<String> {
+template_engine
+        .render_template(&path_to_render, &parameters)
+        .map_err(|e| anyhow!("cannot render template for path {path_to_render:?} : {}", e))
+}
+
 
 #[cfg(test)]
 mod tests {
