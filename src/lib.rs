@@ -521,18 +521,11 @@ impl ScaffoldDescription {
                 let rendered_content = template_engine
                     .render_template(&content, &parameters)
                     .map_err(|e| anyhow!("cannot render template {entry_path:?} : {}", e))?;
-                let rendered_path = template_engine
-                    .render_template(
-                        dir_path
-                            .join(entry_path)
-                            .to_str()
-                            .expect("path is not utf8 valid"),
-                        &parameters,
-                    )
-                    .map_err(|e| {
-                        anyhow!("cannot render template for path {entry_path:?} : {}", e)
-                    })?;
 
+                let rendered_path =
+                    render_path(&mut template_engine, dir_path.join(entry_path)
+                    .to_str()
+                    .expect("path is not valid utf8"), &parameters)?;
                 (rendered_path, rendered_content)
             };
 
@@ -647,12 +640,65 @@ impl ScaffoldDescription {
     }
 }
 
+#[cfg(windows)]
+fn render_path(
+    template_engine: &mut Handlebars,
+    path_to_render: &str,
+    parameters: &BTreeMap<String, Value>,
+) -> Result<String> {
+    // Paths can be tricky, especially across OS.
+    // handlebars seems more comfortable with / than \ to interpolate the values correctly
+    // hence this workaround
+    let replace_sequence = "surelynoonewillusethissequenceinatemplatehuh";
+    let path_to_render = path_to_render
+        .replace('\\', replace_sequence);
+
+    let rendered_path = template_engine
+        .render_template(&path_to_render, &parameters)
+        .map_err(|e| anyhow!("cannot render template for path {path_to_render:?} : {}", e))?;
+
+    Ok(rendered_path.replace(replace_sequence, "\\"))
+}
+
+#[cfg(not(windows))]
+fn render_path(
+    template_engine: &mut Handlebars,
+    path_to_render: &str,
+    parameters: &BTreeMap<String, Value>,
+) -> Result<String> {
+template_engine
+        .render_template(&path_to_render, &parameters)
+        .map_err(|e| anyhow!("cannot render template for path {path_to_render:?} : {}", e))
+}
+
+
 #[cfg(test)]
 mod tests {
+    use crate::{render_path, Handlebars, BTreeMap};
+
     use super::ScaffoldDescription;
     use std::fs::{remove_file, File};
     use std::io::Write;
     use std::process::{Command, Stdio};
+
+    #[test]
+    fn windows_paths_interpolation_works() {
+        // this isn't completely a scaffold test.
+        // This is us making sure we don't regress with the interpolation
+        let mut template_engine = Handlebars::new();
+
+        let windows_path = 
+            "\\\\?\\C:\\Users\\Ignition\\AppData\\Local\\Temp\\router_scaffoldXwTZ11\\src\\plugins\\{{snake_name}}.rs";
+
+        let mut parameters = BTreeMap::new();
+        parameters.insert("snake_name".to_string(), "tracing".to_string().into());
+
+        let res = render_path(&mut template_engine, windows_path, &parameters).unwrap();
+
+        assert_eq!("\\\\?\\C:\\Users\\Ignition\\AppData\\Local\\Temp\\router_scaffoldXwTZ11\\src\\plugins\\tracing.rs", res);
+
+
+    }
 
     #[test]
     fn split_and_run_cmd() {
