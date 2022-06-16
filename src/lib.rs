@@ -681,6 +681,7 @@ mod tests {
     use std::io::Write;
     use std::process::{Command, Stdio};
 
+    #[cfg(windows)]
     #[test]
     fn windows_paths_interpolation_works() {
         // this isn't completely a scaffold test.
@@ -696,8 +697,23 @@ mod tests {
         let res = render_path(&mut template_engine, windows_path, &parameters).unwrap();
 
         assert_eq!("\\\\?\\C:\\Users\\Ignition\\AppData\\Local\\Temp\\router_scaffoldXwTZ11\\src\\plugins\\tracing.rs", res);
+    }
 
+    #[test]
+    fn unix_paths_interpolation_works() {
+        // this isn't completely a scaffold test.
+        // This is us making sure we don't regress with the interpolation
+        let mut template_engine = Handlebars::new();
 
+        let windows_path = 
+            "/tmp/router_scaffoldXwTZ11/src/plugins/{{snake_name}}.rs";
+
+        let mut parameters = BTreeMap::new();
+        parameters.insert("snake_name".to_string(), "tracing".to_string().into());
+
+        let res = render_path(&mut template_engine, windows_path, &parameters).unwrap();
+
+        assert_eq!("/tmp/router_scaffoldXwTZ11/src/plugins/tracing.rs", res);
     }
 
     #[test]
