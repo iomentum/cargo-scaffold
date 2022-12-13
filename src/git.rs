@@ -55,14 +55,23 @@ pub(crate) fn clone(
 
     // Either a git tag, commit
     if let Some(git_reference) = reference_opt {
-        let (obj, reference) = repo.revparse_ext(git_reference)?;
-        repo.checkout_tree(&obj, None)?;
-        match reference {
-            // tagref is an actual reference like branches or tags
-            Some(reporef) => repo.set_head(reporef.name().expect("tag has a name; qed")),
-            // this is a commit, not a reference
-            None => repo.set_head_detached(obj.id()),
-        }?;
+        match repo.revparse_ext(git_reference) {
+            Ok((obj, reference)) => {
+                repo.checkout_tree(&obj, None)?;
+                match reference {
+                    // tagref is an actual reference like branches or tags
+                    Some(reporef) => repo.set_head(reporef.name().expect("tag has a name; qed")),
+                    // this is a commit, not a reference
+                    None => repo.set_head_detached(obj.id()),
+                }?;
+            }
+            Err(_) => {
+                // It might be a branch
+                std::fs::remove_dir_all(target_dir)?;
+                builder.branch(git_reference);
+                let _repo = builder.clone(repository, target_dir)?;
+            }
+        }
     }
 
     Ok(())
@@ -104,6 +113,24 @@ mod tests {
         }
         fs::create_dir_all(&tmp_dir).unwrap();
         clone(template_path, &commit, &tmp_dir, &private_key_path, false).unwrap();
+        fs::remove_dir_all(&tmp_dir).unwrap();
+    }
+
+    #[test]
+    fn clone_http_branch() {
+        let private_key_path = PathBuf::from(&format!(
+            "{}/.ssh/id_rsa",
+            env::var("HOME").expect("cannot fetch $HOME")
+        ));
+        let branch = Some("main".to_owned());
+        let template_path = "https://github.com/apollographql/router.git";
+        let tmp_dir =
+            env::temp_dir().join(format!("{:x}2", md5::compute(&branch.clone().unwrap())));
+        if tmp_dir.exists() {
+            fs::remove_dir_all(&tmp_dir).unwrap();
+        }
+        fs::create_dir_all(&tmp_dir).unwrap();
+        clone(template_path, &branch, &tmp_dir, &private_key_path, false).unwrap();
         fs::remove_dir_all(&tmp_dir).unwrap();
     }
 

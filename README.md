@@ -32,6 +32,9 @@ cargo scaffold https://github.com/username/template.git
 
 # From git repository based on a specific commit
 cargo scaffold https://github.com/username/template.git -t deed14dcbf17ba87f6659ea05755cf94cb1464ab
+
+# From git repository based on a specific branch
+cargo scaffold https://github.com/username/template.git -t main
 ```
 
 Here are the available options for `cargo scaffold`:
@@ -50,8 +53,7 @@ FLAGS:
 
 OPTIONS:
     -t, --git_ref <git_ref>
-            Full commit hash or tag from which the template is cloned (i.e.: "deed14dcbf17ba87f6659ea05755cf94cb1464ab"
-            or "v0.5.0")
+            Full commit hash, tag or branch from which the template is cloned (i.e.: "deed14dcbf17ba87f6659ea05755cf94cb1464ab" or "v0.5.0" or "main")
     -n, --name <name>
             Specify the name of your generated project (and so skip the prompt asking for it)
         --param <parameters>...                  Supply parameters via the command line in <name>=<value> format
