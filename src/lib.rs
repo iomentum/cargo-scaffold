@@ -98,8 +98,8 @@ pub struct Opts {
     #[structopt(name = "repository_template_path", short = "r", long = "path")]
     pub repository_template_path: Option<PathBuf>,
 
-    /// Full commit hash or tag from which the template is cloned
-    /// (i.e.: "deed14dcbf17ba87f6659ea05755cf94cb1464ab" or "v0.5.0")
+    /// Full commit hash, tag or branch from which the template is cloned
+    /// (i.e.: "deed14dcbf17ba87f6659ea05755cf94cb1464ab" or "v0.5.0" or "main")
     #[structopt(name = "git_ref", short = "t", long = "git_ref")]
     pub git_ref: Option<String>,
 
