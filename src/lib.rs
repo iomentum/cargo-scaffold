@@ -514,7 +514,7 @@ impl ScaffoldDescription {
             }
             let (path, content) = if disable_templating.is_match(entry_path) {
                 (
-                    dir_path.join(entry_path).to_string_lossy().to_string(),
+                    dir_path.join(entry_path),
                     content,
                 )
             } else {
@@ -524,10 +524,7 @@ impl ScaffoldDescription {
                     .render_template(content, &parameters)
                     .map_err(|e| anyhow!("cannot render template {entry_path:?} : {}", e))?;
 
-                let rendered_path =
-                    render_path(&mut template_engine, dir_path.join(entry_path)
-                    .to_str()
-                    .expect("path is not valid utf8"), &parameters)?;
+                let rendered_path = render_path(&template_engine, &dir_path.join(entry_path), &parameters)?;
                 (rendered_path, rendered_content.into_bytes())
             };
 
@@ -544,7 +541,7 @@ impl ScaffoldDescription {
 
             let mut file = OpenOptions::new().write(true).create(true).open(&path)?;
             file.set_permissions(permissions)
-                .map_err(|e| anyhow!("cannot set permission to file '{}' : {}", path, e))?;
+                .map_err(|e| anyhow!("cannot set permission to file {:?} : {}", path, e))?;
             file.write_all(&content)
                 .map_err(|e| anyhow!("cannot create file : {}", e))?;
         }
@@ -642,36 +639,26 @@ impl ScaffoldDescription {
     }
 }
 
-#[cfg(windows)]
-fn render_path(
-    template_engine: &mut Handlebars,
-    path_to_render: &str,
-    parameters: &BTreeMap<String, Value>,
-) -> Result<String> {
-    // Paths can be tricky, especially across OS.
-    // handlebars seems more comfortable with / than \ to interpolate the values correctly
-    // hence this workaround
-    let replace_sequence = "surelynoonewillusethissequenceinatemplatehuh";
-    let path_to_render = path_to_render
-        .replace('\\', replace_sequence);
 
-    let rendered_path = template_engine
-        .render_template(&path_to_render, &parameters)
-        .map_err(|e| anyhow!("cannot render template for path {path_to_render:?} : {}", e))?;
-
-    Ok(rendered_path.replace(replace_sequence, "\\"))
+fn render_path(template_engine: &Handlebars, path: &Path, parameters: &BTreeMap<String, Value>) -> Result<PathBuf> {
+    // The backslash character used as path separator on windows is an escape character for handlebars.
+    // Avoid passing it to the template renderer by expanding each path component individually.
+    // This also prevents strange patterns where template placeholders span across single folder/file names.
+    let mut output = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::Normal(component) => {
+                let component = component.to_str().ok_or_else(|| anyhow!("invalid Unicode path: {path:?}"))?;
+                let rendered = template_engine.render_template(component, parameters)
+                    .map_err(|e| anyhow!("cannot render template for path {path:?} : {}", e))?;
+                output.push(rendered);
+            },
+            component => output.push(component)
+        };
+    }
+    Ok(output)
 }
 
-#[cfg(not(windows))]
-fn render_path(
-    template_engine: &mut Handlebars,
-    path_to_render: &str,
-    parameters: &BTreeMap<String, Value>,
-) -> Result<String> {
-template_engine
-        .render_template(&path_to_render, &parameters)
-        .map_err(|e| anyhow!("cannot render template for path {path_to_render:?} : {}", e))
-}
 
 
 #[cfg(test)]
@@ -681,41 +668,43 @@ mod tests {
     use super::ScaffoldDescription;
     use std::fs::{remove_file, File};
     use std::io::Write;
+    use std::path::Path;
     use std::process::{Command, Stdio};
 
-    #[cfg(windows)]
     #[test]
+    #[cfg(windows)]
     fn windows_paths_interpolation_works() {
         // this isn't completely a scaffold test.
         // This is us making sure we don't regress with the interpolation
-        let mut template_engine = Handlebars::new();
-
-        let windows_path = 
-            "\\\\?\\C:\\Users\\Ignition\\AppData\\Local\\Temp\\router_scaffoldXwTZ11\\src\\plugins\\{{snake_name}}.rs";
+        let template_engine = Handlebars::new();
 
         let mut parameters = BTreeMap::new();
         parameters.insert("snake_name".to_string(), "tracing".to_string().into());
 
-        let res = render_path(&mut template_engine, windows_path, &parameters).unwrap();
+        let path = Path::new(
+            "\\\\?\\C:\\Users\\Ignition\\AppData\\Local\\Temp\\router_scaffoldXwTZ11\\src\\plugins\\{{snake_name}}.rs"
+        );
+        let res = render_path(&template_engine, path, &parameters).unwrap();
 
-        assert_eq!("\\\\?\\C:\\Users\\Ignition\\AppData\\Local\\Temp\\router_scaffoldXwTZ11\\src\\plugins\\tracing.rs", res);
+        assert_eq!(Path::new("\\\\?\\C:\\Users\\Ignition\\AppData\\Local\\Temp\\router_scaffoldXwTZ11\\src\\plugins\\tracing.rs"), res);
     }
 
     #[test]
+    #[cfg(unix)]
     fn unix_paths_interpolation_works() {
         // this isn't completely a scaffold test.
         // This is us making sure we don't regress with the interpolation
-        let mut template_engine = Handlebars::new();
-
-        let windows_path = 
-            "/tmp/router_scaffoldXwTZ11/src/plugins/{{snake_name}}.rs";
+        let template_engine = Handlebars::new();
 
         let mut parameters = BTreeMap::new();
         parameters.insert("snake_name".to_string(), "tracing".to_string().into());
 
-        let res = render_path(&mut template_engine, windows_path, &parameters).unwrap();
+        let path = Path::new(
+            "/tmp/router_scaffoldXwTZ11/src/plugins/{{snake_name}}.rs"
+        );
+        let res = render_path(&template_engine, path, &parameters).unwrap();
 
-        assert_eq!("/tmp/router_scaffoldXwTZ11/src/plugins/tracing.rs", res);
+        assert_eq!(Path::new("/tmp/router_scaffoldXwTZ11/src/plugins/tracing.rs"), res);
     }
 
     #[test]
