@@ -504,12 +504,12 @@ impl ScaffoldDescription {
             }
 
             let filename = entry.path();
-            let mut content = String::new();
+            let mut content = Vec::new();
             {
                 let mut file =
                     File::open(filename).map_err(|e| anyhow!("cannot open file : {}", e))?;
                 // TODO add the ability to read a non string file
-                file.read_to_string(&mut content)
+                file.read_to_end(&mut content)
                     .map_err(|e| anyhow!("cannot read file {filename:?} : {}", e))?;
             }
             let (path, content) = if disable_templating.is_match(entry_path) {
@@ -518,15 +518,17 @@ impl ScaffoldDescription {
                     content,
                 )
             } else {
+                let content = std::str::from_utf8(&content)
+                    .map_err(|_| anyhow!("invalid UTF-8 in {entry_path:?}, consider disabling templating for this file"))?;
                 let rendered_content = template_engine
-                    .render_template(&content, &parameters)
+                    .render_template(content, &parameters)
                     .map_err(|e| anyhow!("cannot render template {entry_path:?} : {}", e))?;
 
                 let rendered_path =
                     render_path(&mut template_engine, dir_path.join(entry_path)
                     .to_str()
                     .expect("path is not valid utf8"), &parameters)?;
-                (rendered_path, rendered_content)
+                (rendered_path, rendered_content.into_bytes())
             };
 
             let filename_path = PathBuf::from(&path);
@@ -543,7 +545,7 @@ impl ScaffoldDescription {
             let mut file = OpenOptions::new().write(true).create(true).open(&path)?;
             file.set_permissions(permissions)
                 .map_err(|e| anyhow!("cannot set permission to file '{}' : {}", path, e))?;
-            file.write_all(content.as_bytes())
+            file.write_all(&content)
                 .map_err(|e| anyhow!("cannot create file : {}", e))?;
         }
 
