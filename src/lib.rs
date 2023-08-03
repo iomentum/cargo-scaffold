@@ -31,7 +31,8 @@ pub const SCAFFOLD_FILENAME: &str = ".scaffold.toml";
 #[derive(Serialize, Deserialize)]
 pub struct ScaffoldDescription {
     template: TemplateDescription,
-    parameters: Option<BTreeMap<String, Parameter>>,
+    #[serde(default)]
+    parameters: BTreeMap<String, Parameter>,
     hooks: Option<Hooks>,
     #[serde(skip)]
     target_dir: Option<PathBuf>,
@@ -221,10 +222,6 @@ impl ScaffoldDescription {
         self.project_name.clone()
     }
 
-    pub fn parameters(&self) -> Option<&BTreeMap<String, Parameter>> {
-        self.parameters.as_ref()
-    }
-
     fn create_dir(&self, name: &str) -> Result<PathBuf> {
         let mut dir_path = self
             .target_dir
@@ -276,98 +273,26 @@ impl ScaffoldDescription {
 
     /// Launch prompt to the user to ask for different parameters
     pub fn fetch_parameters_value(&self) -> Result<BTreeMap<String, Value>> {
+        use std::collections::btree_map::Entry;
+
         let mut parameters: BTreeMap<String, Value> = self.default_parameters.clone();
-        let mut parameter_list = self
-            .parameters
-            .clone()
-            .unwrap_or_default()
-            .into_iter()
-            .collect::<Vec<_>>();
-        if let None = self.parameters.clone().unwrap_or_default().get("name") {
-            parameter_list.insert(
-                0,
-                (
-                    "name".to_string(),
-                    Parameter {
-                        message: "What is the name of your generated project ?".to_string(),
-                        required: true,
-                        r#type: ParameterType::String,
-                        default: None,
-                        values: None,
-                        tags: None,
-                    },
-                ),
-            );
-        }
-        for (parameter_name, parameter) in parameter_list {
-            if parameters.contains_key(&parameter_name) {
-                continue;
+        for (parameter_name, parameter) in &self.parameters {
+            if let Entry::Vacant(entry) = parameters.entry(parameter_name.clone()) {
+                entry.insert(parameter.to_value_interactive()?);
             }
-
-            let value: Value = match parameter.r#type {
-                ParameterType::String => {
-                    Value::String(Input::new().with_prompt(parameter.message).interact()?)
-                }
-                ParameterType::Float => Value::Float(
-                    Input::<f64>::new()
-                        .with_prompt(parameter.message)
-                        .interact()?,
-                ),
-                ParameterType::Integer => Value::Integer(
-                    Input::<i64>::new()
-                        .with_prompt(parameter.message)
-                        .interact()?,
-                ),
-                ParameterType::Boolean => {
-                    Value::Boolean(Confirm::new().with_prompt(parameter.message).interact()?)
-                }
-                ParameterType::Select => {
-                    let idx_selected = Select::new()
-                        .items(
-                            parameter
-                                .values
-                                .as_ref()
-                                .expect("cannot make a select parameter with empty values"),
-                        )
-                        .with_prompt(parameter.message)
-                        .default(0)
-                        .interact()?;
-                    parameter
-                        .values
-                        .as_ref()
-                        .expect("cannot make a select parameter with empty values")
-                        .get(idx_selected)
-                        .unwrap()
-                        .clone()
-                }
-                ParameterType::MultiSelect => {
-                    let idxs_selected = MultiSelect::new()
-                        .items(
-                            parameter
-                                .values
-                                .as_ref()
-                                .expect("cannot make a select parameter with empty values"),
-                        )
-                        .with_prompt(parameter.message.clone())
-                        .interact()?;
-                    let values = idxs_selected
-                        .into_iter()
-                        .map(|idx| {
-                            parameter
-                                .values
-                                .as_ref()
-                                .expect("cannot make a select parameter with empty values")
-                                .get(idx)
-                                .unwrap()
-                                .clone()
-                        })
-                        .collect();
-
-                    Value::Array(values)
-                }
-            };
-            parameters.insert(parameter_name, value);
         }
+
+        if let Entry::Vacant(entry) = parameters.entry("name".to_string()) {
+            let value = Parameter {
+                message: "What is the name of your generated project ?".to_string(),
+                required: true,
+                r#type: ParameterType::String,
+                default: None,
+                values: None,
+                tags: None,
+            }.to_value_interactive()?;
+            entry.insert(value);
+        };
 
         Ok(parameters)
     }
@@ -660,6 +585,74 @@ fn render_path(template_engine: &Handlebars, path: &Path, parameters: &BTreeMap<
 }
 
 
+
+impl Parameter {
+    fn to_value_interactive(&self) -> Result<toml::Value> {
+        let value = match self.r#type {
+            ParameterType::String => {
+                Value::String(Input::new().with_prompt(&self.message).interact()?)
+            }
+            ParameterType::Float => Value::Float(
+                Input::<f64>::new()
+                    .with_prompt(&self.message)
+                    .interact()?
+            ),
+            ParameterType::Integer => Value::Integer(
+                Input::<i64>::new()
+                    .with_prompt(&self.message)
+                    .interact()?,
+            ),
+            ParameterType::Boolean => {
+                Value::Boolean(Confirm::new().with_prompt(&self.message).interact()?)
+            }
+            ParameterType::Select => {
+                let idx_selected = Select::new()
+                    .items(
+                        self
+                            .values
+                            .as_ref()
+                            .expect("cannot make a select parameter with empty values"),
+                    )
+                    .with_prompt(&self.message)
+                    .default(0)
+                    .interact()?;
+                self
+                    .values
+                    .as_ref()
+                    .expect("cannot make a select parameter with empty values")
+                    .get(idx_selected)
+                    .unwrap()
+                    .clone()
+            }
+            ParameterType::MultiSelect => {
+                let idxs_selected = MultiSelect::new()
+                    .items(
+                        self
+                            .values
+                            .as_ref()
+                            .expect("cannot make a select parameter with empty values"),
+                    )
+                    .with_prompt(&self.message)
+                    .interact()?;
+                let values = idxs_selected
+                    .into_iter()
+                    .map(|idx| {
+                        self
+                            .values
+                            .as_ref()
+                            .expect("cannot make a select parameter with empty values")
+                            .get(idx)
+                            .unwrap()
+                            .clone()
+                    })
+                    .collect();
+
+                Value::Array(values)
+            }
+        };
+        Ok(value)
+    }
+}
 
 #[cfg(test)]
 mod tests {
