@@ -2,8 +2,6 @@
 mod git;
 mod helpers;
 
-use crate::git::clone;
-
 use std::{
     collections::BTreeMap,
     env,
@@ -120,7 +118,7 @@ pub struct Opts {
     #[structopt(short = "a", long = "append")]
     pub append: bool,
 
-    /// Specify if your SSH key is protected by a passphrase
+    /// Ignored, kept for backwards compatibility [DEPRECATED]
     #[structopt(short = "p", long = "passphrase")]
     pub passphrase_needed: bool,
 
@@ -146,7 +144,6 @@ impl Opts {
         target_dir: Option<PathBuf>,
         force: Option<bool>,
         append: Option<bool>,
-        passphrase_needed: Option<bool>,
         private_key_path: Option<PathBuf>,
         parameters: Vec<String>,
     ) -> Opts {
@@ -158,7 +155,7 @@ impl Opts {
             target_dir,
             force: force.unwrap_or_default(),
             append: append.unwrap_or_default(),
-            passphrase_needed: passphrase_needed.unwrap_or_default(),
+            passphrase_needed: false,
             private_key_path,
             parameters,
         }
@@ -183,17 +180,11 @@ impl ScaffoldDescription {
                     fs::remove_dir_all(&tmp_dir)?;
                 }
                 fs::create_dir_all(&tmp_dir)?;
-                clone(
+                git::clone(
                     &template_path,
                     &opts.git_ref,
                     &tmp_dir,
-                    &opts.private_key_path.unwrap_or_else(|| {
-                        PathBuf::from(&format!(
-                            "{}/.ssh/id_rsa",
-                            env::var("HOME").expect("cannot fetch $HOME")
-                        ))
-                    }),
-                    opts.passphrase_needed,
+                    opts.private_key_path.as_deref(),
                 )?;
                 template_path = match opts.repository_template_path {
                     Some(sub_path) => tmp_dir.join(sub_path).to_string_lossy().to_string(),
