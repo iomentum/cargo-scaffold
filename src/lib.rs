@@ -182,7 +182,7 @@ impl ScaffoldDescription {
                 fs::create_dir_all(&tmp_dir)?;
                 git::clone(
                     &template_path,
-                    &opts.git_ref,
+                    opts.git_ref.as_deref(),
                     &tmp_dir,
                     opts.private_key_path.as_deref(),
                 )?;

@@ -4,7 +4,7 @@ use std::path::Path;
 
 pub(crate) fn clone(
     repository: &str,
-    reference_opt: &Option<String>,
+    reference_opt: Option<&str>,
     target_dir: &Path,
     private_key_path: Option<&Path>,
 ) -> Result<()> {
@@ -74,23 +74,23 @@ mod tests {
     fn clone_http() {
         let template_path = "https://github.com/http-rs/surf.git";
         let tmp_dir = tempdir().unwrap();
-        clone(template_path, &None, tmp_dir.path(), None).unwrap();
+        clone(template_path, None, tmp_dir.path(), None).unwrap();
     }
 
     #[test]
     fn clone_http_commit() {
-        let commit = Some("8f0039488b3877ca59592900bc7ad645a83e2886".to_owned());
+        let commit = Some("8f0039488b3877ca59592900bc7ad645a83e2886");
         let template_path = "https://github.com/http-rs/surf.git";
         let tmp_dir = tempdir().unwrap();
-        clone(template_path, &commit, tmp_dir.path(), None).unwrap();
+        clone(template_path, commit, tmp_dir.path(), None).unwrap();
     }
 
     #[test]
     fn clone_http_branch() {
-        let branch = Some("main".to_owned());
+        let branch = Some("main");
         let template_path = "https://github.com/apollographql/router.git";
         let tmp_dir = tempdir().unwrap();
-        clone(template_path, &branch, tmp_dir.path(), None).unwrap();
+        clone(template_path, branch, tmp_dir.path(), None).unwrap();
     }
 
     #[test]
@@ -98,15 +98,15 @@ mod tests {
     fn clone_ssh() {
         let template_path = "git@github.com:http-rs/surf.git";
         let tmp_dir = tempdir().unwrap();
-        clone(template_path, &None, tmp_dir.path(), None).unwrap();
+        clone(template_path, None, tmp_dir.path(), None).unwrap();
     }
 
     #[test]
     // warn: your ssh key must be in pem format
     fn clone_ssh_commit() {
-        let commit = Some("8f0039488b3877ca59592900bc7ad645a83e2886".to_owned());
+        let commit = Some("8f0039488b3877ca59592900bc7ad645a83e2886");
         let template_path = "git@github.com:http-rs/surf.git";
         let tmp_dir = tempdir().unwrap();
-        clone(template_path, &commit, tmp_dir.path(), None).unwrap();
+        clone(template_path, commit, tmp_dir.path(), None).unwrap();
     }
 }
