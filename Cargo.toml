@@ -35,3 +35,6 @@ name = "cargo-scaffold"
 [features]
 default = ["helpers"]
 helpers = ["handlebars_misc_helpers"]
+
+[dev-dependencies]
+tempfile = "3.7.1"

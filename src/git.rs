@@ -68,59 +68,37 @@ pub(crate) fn clone(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{env, fs};
+    use tempfile::tempdir;
 
     #[test]
     fn clone_http() {
         let template_path = "https://github.com/http-rs/surf.git";
-        let tmp_dir = env::temp_dir().join(format!("{:x}1", md5::compute(template_path)));
-        if tmp_dir.exists() {
-            fs::remove_dir_all(&tmp_dir).unwrap();
-        }
-        fs::create_dir_all(&tmp_dir).unwrap();
-        clone(template_path, &None, &tmp_dir, None).unwrap();
-        fs::remove_dir_all(&tmp_dir).unwrap();
+        let tmp_dir = tempdir().unwrap();
+        clone(template_path, &None, tmp_dir.path(), None).unwrap();
     }
 
     #[test]
     fn clone_http_commit() {
         let commit = Some("8f0039488b3877ca59592900bc7ad645a83e2886".to_owned());
         let template_path = "https://github.com/http-rs/surf.git";
-        let tmp_dir =
-            env::temp_dir().join(format!("{:x}2", md5::compute(commit.clone().unwrap())));
-        if tmp_dir.exists() {
-            fs::remove_dir_all(&tmp_dir).unwrap();
-        }
-        fs::create_dir_all(&tmp_dir).unwrap();
-        clone(template_path, &commit, &tmp_dir, None).unwrap();
-        fs::remove_dir_all(&tmp_dir).unwrap();
+        let tmp_dir = tempdir().unwrap();
+        clone(template_path, &commit, tmp_dir.path(), None).unwrap();
     }
 
     #[test]
     fn clone_http_branch() {
         let branch = Some("main".to_owned());
         let template_path = "https://github.com/apollographql/router.git";
-        let tmp_dir =
-            env::temp_dir().join(format!("{:x}2", md5::compute(branch.clone().unwrap())));
-        if tmp_dir.exists() {
-            fs::remove_dir_all(&tmp_dir).unwrap();
-        }
-        fs::create_dir_all(&tmp_dir).unwrap();
-        clone(template_path, &branch, &tmp_dir, None).unwrap();
-        fs::remove_dir_all(&tmp_dir).unwrap();
+        let tmp_dir = tempdir().unwrap();
+        clone(template_path, &branch, tmp_dir.path(), None).unwrap();
     }
 
     #[test]
     // warn: your ssh key must be in pem format
     fn clone_ssh() {
         let template_path = "git@github.com:http-rs/surf.git";
-        let tmp_dir = env::temp_dir().join(format!("{:x}3", md5::compute(template_path)));
-        if tmp_dir.exists() {
-            fs::remove_dir_all(&tmp_dir).unwrap();
-        }
-        fs::create_dir_all(&tmp_dir).unwrap();
-        clone(template_path, &None, &tmp_dir, None).unwrap();
-        fs::remove_dir_all(&tmp_dir).unwrap();
+        let tmp_dir = tempdir().unwrap();
+        clone(template_path, &None, tmp_dir.path(), None).unwrap();
     }
 
     #[test]
@@ -128,12 +106,7 @@ mod tests {
     fn clone_ssh_commit() {
         let commit = Some("8f0039488b3877ca59592900bc7ad645a83e2886".to_owned());
         let template_path = "git@github.com:http-rs/surf.git";
-        let tmp_dir = env::temp_dir().join(format!("{:x}4", md5::compute(commit.unwrap())));
-        if tmp_dir.exists() {
-            fs::remove_dir_all(&tmp_dir).unwrap();
-        }
-        fs::create_dir_all(&tmp_dir).unwrap();
-        clone(template_path, &None, &tmp_dir, None).unwrap();
-        fs::remove_dir_all(&tmp_dir).unwrap();
+        let tmp_dir = tempdir().unwrap();
+        clone(template_path, &commit, tmp_dir.path(), None).unwrap();
     }
 }
