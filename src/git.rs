@@ -1,15 +1,12 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use console::{Emoji, Style};
-use dialoguer::Password;
-use git2::{Cred, RemoteCallbacks};
 use std::path::Path;
 
 pub(crate) fn clone(
     repository: &str,
-    reference_opt: &Option<String>,
+    reference_opt: Option<&str>,
     target_dir: &Path,
-    private_key_path: &Path,
-    passphrase_needed: bool,
+    private_key_path: Option<&Path>,
 ) -> Result<()> {
     let cyan = Style::new().cyan();
     println!(
@@ -17,30 +14,21 @@ pub(crate) fn clone(
         Emoji("🔄", ""),
         cyan.apply_to("Cloning repository…"),
     );
-    let mut fetch_options = git2::FetchOptions::new();
-    if !repository.starts_with("http") {
-        let mut callbacks = RemoteCallbacks::new();
-        let passphrase = if passphrase_needed {
-            Password::new()
-                .with_prompt(format!("Enter passphrase for {:?}", private_key_path))
-                .interact()?
-                .into()
-        } else {
-            None
-        };
-        callbacks.credentials(move |_url, username_from_url, _allowed_types| {
-            Cred::ssh_key(
-                username_from_url.unwrap(),
-                // Some(&private_key_path.with_extension("pub")),
-                None,
-                private_key_path,
-                passphrase.as_deref(),
-            )
-        });
 
-        // Prepare fetch options.
-        fetch_options.remote_callbacks(callbacks);
+    let mut auth = auth_git2::GitAuthenticator::default();
+    if let Some(private_key_path) = private_key_path {
+        auth = auth.add_ssh_key_from_file(private_key_path, None)
     }
+
+    let git_config = git2::Config::open_default()
+        .map_err(|e| anyhow!(e).context("Opening git configuration"))?;
+
+    let mut fetch_options = git2::FetchOptions::new();
+
+    // Add credentials callback.
+    let mut callbacks = git2::RemoteCallbacks::new();
+    callbacks.credentials(auth.credentials(&git_config));
+    fetch_options.remote_callbacks(callbacks);
 
     if reference_opt.is_some() {
         fetch_options.download_tags(git2::AutotagOption::All);
@@ -80,92 +68,45 @@ pub(crate) fn clone(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{env, fs, path::PathBuf};
+    use tempfile::tempdir;
 
     #[test]
     fn clone_http() {
-        let private_key_path = PathBuf::from(&format!(
-            "{}/.ssh/id_rsa",
-            env::var("HOME").expect("cannot fetch $HOME")
-        ));
         let template_path = "https://github.com/http-rs/surf.git";
-        let tmp_dir = env::temp_dir().join(format!("{:x}1", md5::compute(&template_path)));
-        if tmp_dir.exists() {
-            fs::remove_dir_all(&tmp_dir).unwrap();
-        }
-        fs::create_dir_all(&tmp_dir).unwrap();
-        clone(template_path, &None, &tmp_dir, &private_key_path, false).unwrap();
-        fs::remove_dir_all(&tmp_dir).unwrap();
+        let tmp_dir = tempdir().unwrap();
+        clone(template_path, None, tmp_dir.path(), None).unwrap();
     }
 
     #[test]
     fn clone_http_commit() {
-        let private_key_path = PathBuf::from(&format!(
-            "{}/.ssh/id_rsa",
-            env::var("HOME").expect("cannot fetch $HOME")
-        ));
-        let commit = Some("8f0039488b3877ca59592900bc7ad645a83e2886".to_owned());
+        let commit = Some("8f0039488b3877ca59592900bc7ad645a83e2886");
         let template_path = "https://github.com/http-rs/surf.git";
-        let tmp_dir =
-            env::temp_dir().join(format!("{:x}2", md5::compute(&commit.clone().unwrap())));
-        if tmp_dir.exists() {
-            fs::remove_dir_all(&tmp_dir).unwrap();
-        }
-        fs::create_dir_all(&tmp_dir).unwrap();
-        clone(template_path, &commit, &tmp_dir, &private_key_path, false).unwrap();
-        fs::remove_dir_all(&tmp_dir).unwrap();
+        let tmp_dir = tempdir().unwrap();
+        clone(template_path, commit, tmp_dir.path(), None).unwrap();
     }
 
     #[test]
     fn clone_http_branch() {
-        let private_key_path = PathBuf::from(&format!(
-            "{}/.ssh/id_rsa",
-            env::var("HOME").expect("cannot fetch $HOME")
-        ));
-        let branch = Some("main".to_owned());
+        let branch = Some("main");
         let template_path = "https://github.com/apollographql/router.git";
-        let tmp_dir =
-            env::temp_dir().join(format!("{:x}2", md5::compute(&branch.clone().unwrap())));
-        if tmp_dir.exists() {
-            fs::remove_dir_all(&tmp_dir).unwrap();
-        }
-        fs::create_dir_all(&tmp_dir).unwrap();
-        clone(template_path, &branch, &tmp_dir, &private_key_path, false).unwrap();
-        fs::remove_dir_all(&tmp_dir).unwrap();
+        let tmp_dir = tempdir().unwrap();
+        clone(template_path, branch, tmp_dir.path(), None).unwrap();
     }
 
     #[test]
     // warn: your ssh key must be in pem format
     fn clone_ssh() {
-        let private_key_path = PathBuf::from(&format!(
-            "{}/.ssh/id_rsa",
-            env::var("HOME").expect("cannot fetch $HOME")
-        ));
         let template_path = "git@github.com:http-rs/surf.git";
-        let tmp_dir = env::temp_dir().join(format!("{:x}3", md5::compute(&template_path)));
-        if tmp_dir.exists() {
-            fs::remove_dir_all(&tmp_dir).unwrap();
-        }
-        fs::create_dir_all(&tmp_dir).unwrap();
-        clone(template_path, &None, &tmp_dir, &private_key_path, false).unwrap();
-        fs::remove_dir_all(&tmp_dir).unwrap();
+        let tmp_dir = tempdir().unwrap();
+        clone(template_path, None, tmp_dir.path(), None).unwrap();
     }
 
     #[test]
     // warn: your ssh key must be in pem format
     fn clone_ssh_commit() {
-        let private_key_path = PathBuf::from(&format!(
-            "{}/.ssh/id_rsa",
-            env::var("HOME").expect("cannot fetch $HOME")
-        ));
-        let commit = Some("8f0039488b3877ca59592900bc7ad645a83e2886".to_owned());
+        let commit = Some("8f0039488b3877ca59592900bc7ad645a83e2886");
         let template_path = "git@github.com:http-rs/surf.git";
-        let tmp_dir = env::temp_dir().join(format!("{:x}4", md5::compute(&commit.unwrap())));
-        if tmp_dir.exists() {
-            fs::remove_dir_all(&tmp_dir).unwrap();
-        }
-        fs::create_dir_all(&tmp_dir).unwrap();
-        clone(template_path, &None, &tmp_dir, &private_key_path, false).unwrap();
-        fs::remove_dir_all(&tmp_dir).unwrap();
+        let tmp_dir = tempdir().unwrap();
+        clone(template_path, commit, tmp_dir.path(), None).unwrap();
     }
 }

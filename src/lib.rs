@@ -2,8 +2,6 @@
 mod git;
 mod helpers;
 
-use crate::git::clone;
-
 use std::{
     collections::BTreeMap,
     env,
@@ -31,7 +29,8 @@ pub const SCAFFOLD_FILENAME: &str = ".scaffold.toml";
 #[derive(Serialize, Deserialize)]
 pub struct ScaffoldDescription {
     template: TemplateDescription,
-    parameters: Option<BTreeMap<String, Parameter>>,
+    #[serde(default)]
+    parameters: BTreeMap<String, Parameter>,
     hooks: Option<Hooks>,
     #[serde(skip)]
     target_dir: Option<PathBuf>,
@@ -119,7 +118,7 @@ pub struct Opts {
     #[structopt(short = "a", long = "append")]
     pub append: bool,
 
-    /// Specify if your SSH key is protected by a passphrase
+    /// Ignored, kept for backwards compatibility [DEPRECATED]
     #[structopt(short = "p", long = "passphrase")]
     pub passphrase_needed: bool,
 
@@ -145,7 +144,6 @@ impl Opts {
         target_dir: Option<PathBuf>,
         force: Option<bool>,
         append: Option<bool>,
-        passphrase_needed: Option<bool>,
         private_key_path: Option<PathBuf>,
         parameters: Vec<String>,
     ) -> Opts {
@@ -157,7 +155,7 @@ impl Opts {
             target_dir,
             force: force.unwrap_or_default(),
             append: append.unwrap_or_default(),
-            passphrase_needed: passphrase_needed.unwrap_or_default(),
+            passphrase_needed: false,
             private_key_path,
             parameters,
         }
@@ -182,17 +180,11 @@ impl ScaffoldDescription {
                     fs::remove_dir_all(&tmp_dir)?;
                 }
                 fs::create_dir_all(&tmp_dir)?;
-                clone(
+                git::clone(
                     &template_path,
-                    &opts.git_ref,
+                    opts.git_ref.as_deref(),
                     &tmp_dir,
-                    &opts.private_key_path.unwrap_or_else(|| {
-                        PathBuf::from(&format!(
-                            "{}/.ssh/id_rsa",
-                            env::var("HOME").expect("cannot fetch $HOME")
-                        ))
-                    }),
-                    opts.passphrase_needed,
+                    opts.private_key_path.as_deref(),
                 )?;
                 template_path = match opts.repository_template_path {
                     Some(sub_path) => tmp_dir.join(sub_path).to_string_lossy().to_string(),
@@ -219,10 +211,6 @@ impl ScaffoldDescription {
 
     pub fn name(&self) -> Option<String> {
         self.project_name.clone()
-    }
-
-    pub fn parameters(&self) -> Option<&BTreeMap<String, Parameter>> {
-        self.parameters.as_ref()
     }
 
     fn create_dir(&self, name: &str) -> Result<PathBuf> {
@@ -276,98 +264,26 @@ impl ScaffoldDescription {
 
     /// Launch prompt to the user to ask for different parameters
     pub fn fetch_parameters_value(&self) -> Result<BTreeMap<String, Value>> {
+        use std::collections::btree_map::Entry;
+
         let mut parameters: BTreeMap<String, Value> = self.default_parameters.clone();
-        let mut parameter_list = self
-            .parameters
-            .clone()
-            .unwrap_or_default()
-            .into_iter()
-            .collect::<Vec<_>>();
-        if let None = self.parameters.clone().unwrap_or_default().get("name") {
-            parameter_list.insert(
-                0,
-                (
-                    "name".to_string(),
-                    Parameter {
-                        message: "What is the name of your generated project ?".to_string(),
-                        required: true,
-                        r#type: ParameterType::String,
-                        default: None,
-                        values: None,
-                        tags: None,
-                    },
-                ),
-            );
-        }
-        for (parameter_name, parameter) in parameter_list {
-            if parameters.contains_key(&parameter_name) {
-                continue;
+        for (parameter_name, parameter) in &self.parameters {
+            if let Entry::Vacant(entry) = parameters.entry(parameter_name.clone()) {
+                entry.insert(parameter.to_value_interactive()?);
             }
-
-            let value: Value = match parameter.r#type {
-                ParameterType::String => {
-                    Value::String(Input::new().with_prompt(parameter.message).interact()?)
-                }
-                ParameterType::Float => Value::Float(
-                    Input::<f64>::new()
-                        .with_prompt(parameter.message)
-                        .interact()?,
-                ),
-                ParameterType::Integer => Value::Integer(
-                    Input::<i64>::new()
-                        .with_prompt(parameter.message)
-                        .interact()?,
-                ),
-                ParameterType::Boolean => {
-                    Value::Boolean(Confirm::new().with_prompt(parameter.message).interact()?)
-                }
-                ParameterType::Select => {
-                    let idx_selected = Select::new()
-                        .items(
-                            parameter
-                                .values
-                                .as_ref()
-                                .expect("cannot make a select parameter with empty values"),
-                        )
-                        .with_prompt(parameter.message)
-                        .default(0)
-                        .interact()?;
-                    parameter
-                        .values
-                        .as_ref()
-                        .expect("cannot make a select parameter with empty values")
-                        .get(idx_selected)
-                        .unwrap()
-                        .clone()
-                }
-                ParameterType::MultiSelect => {
-                    let idxs_selected = MultiSelect::new()
-                        .items(
-                            parameter
-                                .values
-                                .as_ref()
-                                .expect("cannot make a select parameter with empty values"),
-                        )
-                        .with_prompt(parameter.message.clone())
-                        .interact()?;
-                    let values = idxs_selected
-                        .into_iter()
-                        .map(|idx| {
-                            parameter
-                                .values
-                                .as_ref()
-                                .expect("cannot make a select parameter with empty values")
-                                .get(idx)
-                                .unwrap()
-                                .clone()
-                        })
-                        .collect();
-
-                    Value::Array(values)
-                }
-            };
-            parameters.insert(parameter_name, value);
         }
+
+        if let Entry::Vacant(entry) = parameters.entry("name".to_string()) {
+            let value = Parameter {
+                message: "What is the name of your generated project ?".to_string(),
+                required: true,
+                r#type: ParameterType::String,
+                default: None,
+                values: None,
+                tags: None,
+            }.to_value_interactive()?;
+            entry.insert(value);
+        };
 
         Ok(parameters)
     }
@@ -514,7 +430,7 @@ impl ScaffoldDescription {
             }
             let (path, content) = if disable_templating.is_match(entry_path) {
                 (
-                    dir_path.join(entry_path).to_string_lossy().to_string(),
+                    dir_path.join(entry_path),
                     content,
                 )
             } else {
@@ -524,10 +440,7 @@ impl ScaffoldDescription {
                     .render_template(content, &parameters)
                     .map_err(|e| anyhow!("cannot render template {entry_path:?} : {}", e))?;
 
-                let rendered_path =
-                    render_path(&mut template_engine, dir_path.join(entry_path)
-                    .to_str()
-                    .expect("path is not valid utf8"), &parameters)?;
+                let rendered_path = render_path(&template_engine, &dir_path.join(entry_path), &parameters)?;
                 (rendered_path, rendered_content.into_bytes())
             };
 
@@ -544,7 +457,7 @@ impl ScaffoldDescription {
 
             let mut file = OpenOptions::new().write(true).create(true).open(&path)?;
             file.set_permissions(permissions)
-                .map_err(|e| anyhow!("cannot set permission to file '{}' : {}", path, e))?;
+                .map_err(|e| anyhow!("cannot set permission to file {:?} : {}", path, e))?;
             file.write_all(&content)
                 .map_err(|e| anyhow!("cannot create file : {}", e))?;
         }
@@ -642,37 +555,95 @@ impl ScaffoldDescription {
     }
 }
 
-#[cfg(windows)]
-fn render_path(
-    template_engine: &mut Handlebars,
-    path_to_render: &str,
-    parameters: &BTreeMap<String, Value>,
-) -> Result<String> {
-    // Paths can be tricky, especially across OS.
-    // handlebars seems more comfortable with / than \ to interpolate the values correctly
-    // hence this workaround
-    let replace_sequence = "surelynoonewillusethissequenceinatemplatehuh";
-    let path_to_render = path_to_render
-        .replace('\\', replace_sequence);
 
-    let rendered_path = template_engine
-        .render_template(&path_to_render, &parameters)
-        .map_err(|e| anyhow!("cannot render template for path {path_to_render:?} : {}", e))?;
-
-    Ok(rendered_path.replace(replace_sequence, "\\"))
+fn render_path(template_engine: &Handlebars, path: &Path, parameters: &BTreeMap<String, Value>) -> Result<PathBuf> {
+    // The backslash character used as path separator on windows is an escape character for handlebars.
+    // Avoid passing it to the template renderer by expanding each path component individually.
+    // This also prevents strange patterns where template placeholders span across single folder/file names.
+    let mut output = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::Normal(component) => {
+                let component = component.to_str().ok_or_else(|| anyhow!("invalid Unicode path: {path:?}"))?;
+                let rendered = template_engine.render_template(component, parameters)
+                    .map_err(|e| anyhow!("cannot render template for path {path:?} : {}", e))?;
+                output.push(rendered);
+            },
+            component => output.push(component)
+        };
+    }
+    Ok(output)
 }
 
-#[cfg(not(windows))]
-fn render_path(
-    template_engine: &mut Handlebars,
-    path_to_render: &str,
-    parameters: &BTreeMap<String, Value>,
-) -> Result<String> {
-template_engine
-        .render_template(&path_to_render, &parameters)
-        .map_err(|e| anyhow!("cannot render template for path {path_to_render:?} : {}", e))
-}
 
+
+impl Parameter {
+    fn to_value_interactive(&self) -> Result<toml::Value> {
+        let value = match self.r#type {
+            ParameterType::String => {
+                Value::String(Input::new().with_prompt(&self.message).interact()?)
+            }
+            ParameterType::Float => Value::Float(
+                Input::<f64>::new()
+                    .with_prompt(&self.message)
+                    .interact()?
+            ),
+            ParameterType::Integer => Value::Integer(
+                Input::<i64>::new()
+                    .with_prompt(&self.message)
+                    .interact()?,
+            ),
+            ParameterType::Boolean => {
+                Value::Boolean(Confirm::new().with_prompt(&self.message).interact()?)
+            }
+            ParameterType::Select => {
+                let idx_selected = Select::new()
+                    .items(
+                        self
+                            .values
+                            .as_ref()
+                            .expect("cannot make a select parameter with empty values"),
+                    )
+                    .with_prompt(&self.message)
+                    .default(0)
+                    .interact()?;
+                self
+                    .values
+                    .as_ref()
+                    .expect("cannot make a select parameter with empty values")
+                    .get(idx_selected)
+                    .unwrap()
+                    .clone()
+            }
+            ParameterType::MultiSelect => {
+                let idxs_selected = MultiSelect::new()
+                    .items(
+                        self
+                            .values
+                            .as_ref()
+                            .expect("cannot make a select parameter with empty values"),
+                    )
+                    .with_prompt(&self.message)
+                    .interact()?;
+                let values = idxs_selected
+                    .into_iter()
+                    .map(|idx| {
+                        self
+                            .values
+                            .as_ref()
+                            .expect("cannot make a select parameter with empty values")
+                            .get(idx)
+                            .unwrap()
+                            .clone()
+                    })
+                    .collect();
+
+                Value::Array(values)
+            }
+        };
+        Ok(value)
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -681,41 +652,43 @@ mod tests {
     use super::ScaffoldDescription;
     use std::fs::{remove_file, File};
     use std::io::Write;
+    use std::path::Path;
     use std::process::{Command, Stdio};
 
-    #[cfg(windows)]
     #[test]
+    #[cfg(windows)]
     fn windows_paths_interpolation_works() {
         // this isn't completely a scaffold test.
         // This is us making sure we don't regress with the interpolation
-        let mut template_engine = Handlebars::new();
-
-        let windows_path = 
-            "\\\\?\\C:\\Users\\Ignition\\AppData\\Local\\Temp\\router_scaffoldXwTZ11\\src\\plugins\\{{snake_name}}.rs";
+        let template_engine = Handlebars::new();
 
         let mut parameters = BTreeMap::new();
         parameters.insert("snake_name".to_string(), "tracing".to_string().into());
 
-        let res = render_path(&mut template_engine, windows_path, &parameters).unwrap();
+        let path = Path::new(
+            "\\\\?\\C:\\Users\\Ignition\\AppData\\Local\\Temp\\router_scaffoldXwTZ11\\src\\plugins\\{{snake_name}}.rs"
+        );
+        let res = render_path(&template_engine, path, &parameters).unwrap();
 
-        assert_eq!("\\\\?\\C:\\Users\\Ignition\\AppData\\Local\\Temp\\router_scaffoldXwTZ11\\src\\plugins\\tracing.rs", res);
+        assert_eq!(Path::new("\\\\?\\C:\\Users\\Ignition\\AppData\\Local\\Temp\\router_scaffoldXwTZ11\\src\\plugins\\tracing.rs"), res);
     }
 
     #[test]
+    #[cfg(unix)]
     fn unix_paths_interpolation_works() {
         // this isn't completely a scaffold test.
         // This is us making sure we don't regress with the interpolation
-        let mut template_engine = Handlebars::new();
-
-        let windows_path = 
-            "/tmp/router_scaffoldXwTZ11/src/plugins/{{snake_name}}.rs";
+        let template_engine = Handlebars::new();
 
         let mut parameters = BTreeMap::new();
         parameters.insert("snake_name".to_string(), "tracing".to_string().into());
 
-        let res = render_path(&mut template_engine, windows_path, &parameters).unwrap();
+        let path = Path::new(
+            "/tmp/router_scaffoldXwTZ11/src/plugins/{{snake_name}}.rs"
+        );
+        let res = render_path(&template_engine, path, &parameters).unwrap();
 
-        assert_eq!("/tmp/router_scaffoldXwTZ11/src/plugins/tracing.rs", res);
+        assert_eq!(Path::new("/tmp/router_scaffoldXwTZ11/src/plugins/tracing.rs"), res);
     }
 
     #[test]
