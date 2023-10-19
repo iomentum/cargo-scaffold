@@ -281,7 +281,8 @@ impl ScaffoldDescription {
                 default: None,
                 values: None,
                 tags: None,
-            }.to_value_interactive()?;
+            }
+            .to_value_interactive()?;
             entry.insert(value);
         };
 
@@ -406,7 +407,10 @@ impl ScaffoldDescription {
                 if entry.path().to_str() == Some(".") {
                     continue;
                 }
-                let dir_path_to_create = dir_path.join(entry_path);
+
+                let entry_path = render_path(&template_engine, &entry_path, &parameters)?;
+
+                let dir_path_to_create = dir_path.join(&entry_path);
                 if dir_path_to_create.exists() && self.force {
                     fs::remove_dir_all(&dir_path_to_create)
                         .with_context(|| "Cannot remove directory")?;
@@ -429,10 +433,7 @@ impl ScaffoldDescription {
                     .map_err(|e| anyhow!("cannot read file {filename:?} : {}", e))?;
             }
             let (path, content) = if disable_templating.is_match(entry_path) {
-                (
-                    dir_path.join(entry_path),
-                    content,
-                )
+                (dir_path.join(entry_path), content)
             } else {
                 let content = std::str::from_utf8(&content)
                     .map_err(|_| anyhow!("invalid UTF-8 in {entry_path:?}, consider disabling templating for this file"))?;
@@ -440,7 +441,8 @@ impl ScaffoldDescription {
                     .render_template(content, &parameters)
                     .map_err(|e| anyhow!("cannot render template {entry_path:?} : {}", e))?;
 
-                let rendered_path = render_path(&template_engine, &dir_path.join(entry_path), &parameters)?;
+                let rendered_path =
+                    render_path(&template_engine, &dir_path.join(entry_path), &parameters)?;
                 (rendered_path, rendered_content.into_bytes())
             };
 
@@ -555,8 +557,11 @@ impl ScaffoldDescription {
     }
 }
 
-
-fn render_path(template_engine: &Handlebars, path: &Path, parameters: &BTreeMap<String, Value>) -> Result<PathBuf> {
+fn render_path(
+    template_engine: &Handlebars,
+    path: &Path,
+    parameters: &BTreeMap<String, Value>,
+) -> Result<PathBuf> {
     // The backslash character used as path separator on windows is an escape character for handlebars.
     // Avoid passing it to the template renderer by expanding each path component individually.
     // This also prevents strange patterns where template placeholders span across single folder/file names.
@@ -564,18 +569,19 @@ fn render_path(template_engine: &Handlebars, path: &Path, parameters: &BTreeMap<
     for component in path.components() {
         match component {
             std::path::Component::Normal(component) => {
-                let component = component.to_str().ok_or_else(|| anyhow!("invalid Unicode path: {path:?}"))?;
-                let rendered = template_engine.render_template(component, parameters)
+                let component = component
+                    .to_str()
+                    .ok_or_else(|| anyhow!("invalid Unicode path: {path:?}"))?;
+                let rendered = template_engine
+                    .render_template(component, parameters)
                     .map_err(|e| anyhow!("cannot render template for path {path:?} : {}", e))?;
                 output.push(rendered);
-            },
-            component => output.push(component)
+            }
+            component => output.push(component),
         };
     }
     Ok(output)
 }
-
-
 
 impl Parameter {
     fn to_value_interactive(&self) -> Result<toml::Value> {
@@ -583,32 +589,26 @@ impl Parameter {
             ParameterType::String => {
                 Value::String(Input::new().with_prompt(&self.message).interact()?)
             }
-            ParameterType::Float => Value::Float(
-                Input::<f64>::new()
-                    .with_prompt(&self.message)
-                    .interact()?
-            ),
-            ParameterType::Integer => Value::Integer(
-                Input::<i64>::new()
-                    .with_prompt(&self.message)
-                    .interact()?,
-            ),
+            ParameterType::Float => {
+                Value::Float(Input::<f64>::new().with_prompt(&self.message).interact()?)
+            }
+            ParameterType::Integer => {
+                Value::Integer(Input::<i64>::new().with_prompt(&self.message).interact()?)
+            }
             ParameterType::Boolean => {
                 Value::Boolean(Confirm::new().with_prompt(&self.message).interact()?)
             }
             ParameterType::Select => {
                 let idx_selected = Select::new()
                     .items(
-                        self
-                            .values
+                        self.values
                             .as_ref()
                             .expect("cannot make a select parameter with empty values"),
                     )
                     .with_prompt(&self.message)
                     .default(0)
                     .interact()?;
-                self
-                    .values
+                self.values
                     .as_ref()
                     .expect("cannot make a select parameter with empty values")
                     .get(idx_selected)
@@ -618,8 +618,7 @@ impl Parameter {
             ParameterType::MultiSelect => {
                 let idxs_selected = MultiSelect::new()
                     .items(
-                        self
-                            .values
+                        self.values
                             .as_ref()
                             .expect("cannot make a select parameter with empty values"),
                     )
@@ -628,8 +627,7 @@ impl Parameter {
                 let values = idxs_selected
                     .into_iter()
                     .map(|idx| {
-                        self
-                            .values
+                        self.values
                             .as_ref()
                             .expect("cannot make a select parameter with empty values")
                             .get(idx)
@@ -647,7 +645,7 @@ impl Parameter {
 
 #[cfg(test)]
 mod tests {
-    use crate::{render_path, Handlebars, BTreeMap};
+    use crate::{render_path, BTreeMap, Handlebars};
 
     use super::ScaffoldDescription;
     use std::fs::{remove_file, File};
@@ -683,12 +681,35 @@ mod tests {
         let mut parameters = BTreeMap::new();
         parameters.insert("snake_name".to_string(), "tracing".to_string().into());
 
+        let path = Path::new("/tmp/router_scaffoldXwTZ11/src/plugins/{{snake_name}}.rs");
+        let res = render_path(&template_engine, path, &parameters).unwrap();
+
+        assert_eq!(
+            Path::new("/tmp/router_scaffoldXwTZ11/src/plugins/tracing.rs"),
+            res
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn unix_paths_dirs_work() {
+        // this isn't completely a scaffold test.
+        // This is us making sure we don't regress with the interpolation
+        let template_engine = Handlebars::new();
+
+        let mut parameters = BTreeMap::new();
+        parameters.insert("snake_name".to_string(), "tracing".to_string().into());
+        parameters.insert("directory_name".to_string(), "example".to_string().into());
+
         let path = Path::new(
-            "/tmp/router_scaffoldXwTZ11/src/plugins/{{snake_name}}.rs"
+            "/tmp/router_scaffoldXwTZ11/src/plugins/{{directory_name}}/{{snake_name}}.rs",
         );
         let res = render_path(&template_engine, path, &parameters).unwrap();
 
-        assert_eq!(Path::new("/tmp/router_scaffoldXwTZ11/src/plugins/tracing.rs"), res);
+        assert_eq!(
+            Path::new("/tmp/router_scaffoldXwTZ11/src/plugins/example/tracing.rs"),
+            res
+        );
     }
 
     #[test]
