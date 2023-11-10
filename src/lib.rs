@@ -172,6 +172,10 @@ impl ScaffoldDescription {
             }
             default_parameters.insert(split[0].to_string(), Value::String(split[1].to_string()));
         }
+        if let Some(ref name) = opts.project_name {
+            default_parameters.insert("name".to_string(), Value::String(name.to_string()));
+        }
+
         let mut template_path = opts.template_path.to_string_lossy().to_string();
         let mut scaffold_desc: ScaffoldDescription = {
             if template_path.ends_with(".git") {
