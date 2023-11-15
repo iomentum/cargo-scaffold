@@ -1,16 +1,17 @@
-use std::path::PathBuf;
-
 use anyhow::Result;
-use cargo_scaffold::{Opts, ScaffoldDescription};
+use clap::Parser;
 use toml::Value;
 
+use cargo_scaffold::{Opts, ScaffoldDescription};
 fn main() -> Result<()> {
-    let opts = Opts::builder()
-        .project_name(String::from("testlib"))
-        .template_path(PathBuf::from(
-            "https://github.com/Cosmian/mpc_rust_template.git",
-        ))
-        .build();
+    let args = vec![
+        "libusage",
+        "-n",
+        "testlib",
+        "https://github.com/Cosmian/mpc_rust_template.git",
+    ];
+    let opts = Opts::parse_from(args);
+
     // let mut params = BTreeMap::new();
     // params.insert("players_nb".to_string(), Value::Integer(3));
     let scaffold_desc = ScaffoldDescription::new(opts)?;

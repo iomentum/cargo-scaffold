@@ -1,8 +1,9 @@
 use anyhow::Result;
-use cargo_scaffold::{Cargo, ScaffoldDescription};
-use structopt::StructOpt;
+use clap::Parser;
+
+use cargo_scaffold::{Opts, ScaffoldDescription};
 
 fn main() -> Result<()> {
-    let Cargo::Scaffold(opts) = Cargo::from_args();
+    let opts = Opts::parse();
     ScaffoldDescription::new(opts)?.scaffold()
 }

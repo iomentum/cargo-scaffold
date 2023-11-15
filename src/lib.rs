@@ -13,6 +13,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
+use clap::Parser;
 use console::{Emoji, Style};
 use dialoguer::{Confirm, Input, MultiSelect, Select};
 use fs::OpenOptions;
@@ -20,7 +21,6 @@ use globset::{Glob, GlobSetBuilder};
 use handlebars::Handlebars;
 use helpers::ForRangHelper;
 use serde::{Deserialize, Serialize};
-use structopt::StructOpt;
 use walkdir::WalkDir;
 
 pub use toml::Value;
@@ -81,85 +81,49 @@ pub enum ParameterType {
     MultiSelect,
 }
 
-#[derive(StructOpt)]
-pub enum Cargo {
-    #[structopt(about = "Scaffold a new project from a template")]
-    Scaffold(Opts),
-}
-
-#[derive(StructOpt)]
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about=None)]
 pub struct Opts {
     /// Specifiy your template location
-    #[structopt(name = "template", required = true)]
+    #[arg(name = "template", required = true)]
     pub template_path: PathBuf,
 
     /// Specifiy your template location in the repository if it's not located at the root of your repository
-    #[structopt(name = "repository_template_path", short = "r", long = "path")]
+    #[arg(name = "repository_template_path", short = 'r', long = "path")]
     pub repository_template_path: Option<PathBuf>,
 
     /// Full commit hash, tag or branch from which the template is cloned
     /// (i.e.: "deed14dcbf17ba87f6659ea05755cf94cb1464ab" or "v0.5.0" or "main")
-    #[structopt(name = "git_ref", short = "t", long = "git_ref")]
+    #[arg(name = "git_ref", short = 't', long = "git_ref")]
     pub git_ref: Option<String>,
 
     /// Specify the name of your generated project (and so skip the prompt asking for it)
-    #[structopt(name = "name", short = "n", long = "name")]
+    #[arg(name = "name", short = 'n', long = "name")]
     pub project_name: Option<String>,
 
     /// Specifiy the target directory
-    #[structopt(name = "target_directory", short = "d", long = "target_directory")]
+    #[arg(name = "target_directory", short = 'd', long = "target_directory")]
     pub target_dir: Option<PathBuf>,
 
     /// Override target directory if it exists
-    #[structopt(short = "f", long = "force")]
+    #[arg(short = 'f', long = "force")]
     pub force: bool,
 
     /// Append files in the target directory, create directory with the project name if it doesn't already exist but doesn't overwrite existing file (use force for that kind of usage)
-    #[structopt(short = "a", long = "append")]
+    #[arg(short = 'a', long = "append")]
     pub append: bool,
 
     /// Ignored, kept for backwards compatibility [DEPRECATED]
-    #[structopt(short = "p", long = "passphrase")]
+    #[arg(short = 'p', long = "passphrase")]
     pub passphrase_needed: bool,
 
     /// Specify if your private SSH key is located in another location than $HOME/.ssh/id_rsa
-    #[structopt(short = "k", long = "private_key_path")]
+    #[arg(short = 'k', long = "private_key_path")]
     pub private_key_path: Option<PathBuf>,
 
     /// Supply parameters via the command line in <name>=<value> format
-    #[structopt(long = "param")]
+    #[arg(long = "param")]
     pub parameters: Vec<String>,
-}
-
-#[buildstructor::buildstructor]
-impl Opts {
-    #[builder]
-    #[allow(clippy::too_many_arguments)]
-    #[allow(dead_code)]
-    pub fn new(
-        template_path: PathBuf,
-        repository_template_path: Option<PathBuf>,
-        git_ref: Option<String>,
-        project_name: Option<String>,
-        target_dir: Option<PathBuf>,
-        force: Option<bool>,
-        append: Option<bool>,
-        private_key_path: Option<PathBuf>,
-        parameters: Vec<String>,
-    ) -> Opts {
-        Self {
-            template_path,
-            repository_template_path,
-            git_ref,
-            project_name,
-            target_dir,
-            force: force.unwrap_or_default(),
-            append: append.unwrap_or_default(),
-            passphrase_needed: false,
-            private_key_path,
-            parameters,
-        }
-    }
 }
 
 impl ScaffoldDescription {
