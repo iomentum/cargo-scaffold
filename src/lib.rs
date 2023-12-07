@@ -164,32 +164,37 @@ pub struct Opts {
 }
 
 impl Opts {
+    /// Builder function for the `Opts` structure
+    pub fn builder<T: Into<PathBuf>>(template_path: T) -> Self {
+        Self::default().template_path(template_path)
+    }
+
     /// Set the template path for the structure.
-    pub fn template_path(mut self, path: &str) -> Self {
+    pub fn template_path<T: Into<PathBuf>>(mut self, path: T) -> Self {
         let _ = std::mem::replace(&mut self.template_path, path.into());
         self
     }
 
     /// Set the template path inside the repository
-    pub fn repository_template_path(mut self, path: &str) -> Self {
+    pub fn repository_template_path<T: Into<PathBuf>>(mut self, path: T) -> Self {
         let _ = self.repository_template_path.replace(path.into());
         self
     }
 
     /// Set the git reference
-    pub fn git_ref(mut self, gitref: &str) -> Self {
-        let _ = self.git_ref.replace(gitref.to_string());
+    pub fn git_ref<T: Into<String>>(mut self, gitref: T) -> Self {
+        let _ = self.git_ref.replace(gitref.into());
         self
     }
 
     /// Set the project name
-    pub fn project_name(mut self, name: &str) -> Self {
-        let _ = self.project_name.replace(name.to_string());
+    pub fn project_name<T: Into<String>>(mut self, name: T) -> Self {
+        let _ = self.project_name.replace(name.into());
         self
     }
 
     /// Set the target directory
-    pub fn target_dir(mut self, target_dir: &str) -> Self {
+    pub fn target_dir<T: Into<PathBuf>>(mut self, target_dir: T) -> Self {
         let _ = self.target_dir.replace(target_dir.into());
         self
     }
@@ -213,18 +218,18 @@ impl Opts {
     }
 
     /// Set the private key path
-    pub fn private_key_path(mut self, private_key_path: &str) -> Self {
+    pub fn private_key_path<T: Into<PathBuf>>(mut self, private_key_path: T) -> Self {
         let _ = self.private_key_path.replace(private_key_path.into());
         self
     }
 
-    /// Set the parameters (supplied as vec!["key1=value1", "key2=value2"]).
-    pub fn parameters(mut self, params: Vec<&str>) -> Self {
+    /// Set the parameters (supplied as `vec!["key1=value1", "key2=value2"]`).
+    pub fn parameters<T: Into<String>>(mut self, params: Vec<T>) -> Self {
         let _ = std::mem::replace(
             &mut self.parameters,
             params
-                .iter()
-                .map(|x| x.to_string())
+                .into_iter()
+                .map(|x| x.into())
                 .collect::<Vec<String>>(),
         );
         self
@@ -822,7 +827,11 @@ mod tests {
 
     #[test]
     fn test_build_opts_works() {
-        let opts = Opts::default();
+        let opts = Opts::builder("/path/to/template");
+        assert_eq!(
+            opts.template_path,
+            std::path::PathBuf::from("/path/to/template")
+        );
 
         // Test projct name can be set
         assert!(opts.project_name.is_none());
@@ -830,11 +839,14 @@ mod tests {
         assert_eq!(opts.project_name, Some("project".to_string()));
 
         // Test template can be set
-        assert_eq!(opts.template_path, std::path::PathBuf::from(""));
-        let opts = opts.template_path("/path/to/template");
         assert_eq!(
             opts.template_path,
             std::path::PathBuf::from("/path/to/template")
+        );
+        let opts = opts.template_path("/path/to/new-template");
+        assert_eq!(
+            opts.template_path,
+            std::path::PathBuf::from("/path/to/new-template")
         );
 
         // Test repository template path can be set.
