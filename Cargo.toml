@@ -3,30 +3,28 @@ name = "cargo-scaffold"
 version = "0.8.14"
 authors = ["Benjamin Coenen <5719034+bnjjj@users.noreply.github.com>"]
 edition = "2021"
-description = "cargo scaffold lets you scaffold and generate an entire stack based on a simple toml file and make templating into your templates"
+description = "Scaffold and generate an entire stack using a simple toml config file and 'handlebars' templates."
 license-file = "LICENSE"
 readme = "README.md"
 repository = "https://github.com/iomentum/cargo-scaffold"
 keywords = ["scaffold", "generate", "cargo", "templating"]
 
 [dependencies]
-anyhow = "1.0.32"
-auth-git2 = "0.4.0"
-clap = "2.33.3"
-serde = { version = "1.0.115", features = ["derive"] }
-dialoguer = "0.6.2"
-handlebars = "4.2"
-walkdir = "2.3.1"
-toml = "0.5.6"
+anyhow = "1.0"
+auth-git2 = "0.5"
+clap = { version = "4.4", features = ["derive"]}
+serde = { version = "1.0", features = ["derive"] }
+dialoguer = "0.11"
+handlebars = "4.5"
+walkdir = "2.4"
+toml = "0.8"
 git2 = { version = "0.17", features = ["vendored-openssl"] }
-md5 = "0.7.0"
+md5 = "0.7"
 handlebars_misc_helpers = { version = "0.12", default-features = false, features = ["string", "http_attohttpc", "json"], optional = true }
-indicatif = "0.15.0"
-console = "0.12.0"
-globset = "0.4.5"
+indicatif = "0.17"
+console = "0.15"
+globset = "0.4"
 shell-words = "1.0"
-structopt = "0.3"
-buildstructor = "0.5.4"
 
 [[bin]]
 path = "src/main.rs"
@@ -37,4 +35,4 @@ default = ["helpers"]
 helpers = ["handlebars_misc_helpers"]
 
 [dev-dependencies]
-tempfile = "3.7.1"
+tempfile = "3.8"

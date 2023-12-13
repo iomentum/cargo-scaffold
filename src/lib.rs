@@ -13,6 +13,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
+use clap::Parser;
 use console::{Emoji, Style};
 use dialoguer::{Confirm, Input, MultiSelect, Select};
 use fs::OpenOptions;
@@ -20,7 +21,6 @@ use globset::{Glob, GlobSetBuilder};
 use handlebars::Handlebars;
 use helpers::ForRangHelper;
 use serde::{Deserialize, Serialize};
-use structopt::StructOpt;
 use walkdir::WalkDir;
 
 pub use toml::Value;
@@ -81,84 +81,158 @@ pub enum ParameterType {
     MultiSelect,
 }
 
-#[derive(StructOpt)]
-pub enum Cargo {
-    #[structopt(about = "Scaffold a new project from a template")]
-    Scaffold(Opts),
-}
-
-#[derive(StructOpt)]
+/// Opts: The options for scaffolding.
+///
+/// This structure can be generated using the `parse` or `parse_from` method (when used in Cli) or
+/// can be generated as `default` and then the required values can be updated.
+///
+/// Usage: If generated in a 'cli' binary
+///
+/// ```no_run
+/// # use cargo_scaffold::{Opts, ScaffoldDescription};
+/// # use clap::Parser;
+/// # use anyhow::Result;
+///
+/// # fn main() -> Result<()> {
+///
+///     let opts = Opts::parse_from(vec!["scaffold", "/path/to/template"]);
+///     ScaffoldDescription::new(opts)?.scaffold()
+/// # }
+///
+/// ```
+///
+/// Usage: When generated as a library
+///
+/// ```no_run
+/// # use cargo_scaffold::{Opts, ScaffoldDescription};
+/// # use clap::Parser;
+/// # use anyhow::Result;
+///
+/// # fn main() -> Result<()> {
+///
+///     let mut opts = Opts::default()
+///         .project_name("testlib")
+///         .template_path("https://github.com/Cosmian/mpc_rust_template.git");
+///
+///     ScaffoldDescription::new(opts)?.scaffold()
+/// # }
+///
+/// ```
+#[derive(Parser, Debug, Default)]
+#[command(author, version, about, long_about=None)]
 pub struct Opts {
     /// Specifiy your template location
-    #[structopt(name = "template", required = true)]
-    pub template_path: PathBuf,
+    #[arg(name = "template", required = true)]
+    template_path: PathBuf,
 
     /// Specifiy your template location in the repository if it's not located at the root of your repository
-    #[structopt(name = "repository_template_path", short = "r", long = "path")]
-    pub repository_template_path: Option<PathBuf>,
+    #[arg(name = "repository_template_path", short = 'r', long = "path")]
+    repository_template_path: Option<PathBuf>,
 
     /// Full commit hash, tag or branch from which the template is cloned
     /// (i.e.: "deed14dcbf17ba87f6659ea05755cf94cb1464ab" or "v0.5.0" or "main")
-    #[structopt(name = "git_ref", short = "t", long = "git_ref")]
-    pub git_ref: Option<String>,
+    #[arg(name = "git_ref", short = 't', long = "git_ref")]
+    git_ref: Option<String>,
 
     /// Specify the name of your generated project (and so skip the prompt asking for it)
-    #[structopt(name = "name", short = "n", long = "name")]
-    pub project_name: Option<String>,
+    #[arg(name = "name", short = 'n', long = "name")]
+    project_name: Option<String>,
 
     /// Specifiy the target directory
-    #[structopt(name = "target_directory", short = "d", long = "target_directory")]
-    pub target_dir: Option<PathBuf>,
+    #[arg(name = "target_directory", short = 'd', long = "target_directory")]
+    target_dir: Option<PathBuf>,
 
     /// Override target directory if it exists
-    #[structopt(short = "f", long = "force")]
-    pub force: bool,
+    #[arg(short = 'f', long = "force")]
+    force: bool,
 
     /// Append files in the target directory, create directory with the project name if it doesn't already exist but doesn't overwrite existing file (use force for that kind of usage)
-    #[structopt(short = "a", long = "append")]
-    pub append: bool,
+    #[arg(short = 'a', long = "append")]
+    append: bool,
 
     /// Ignored, kept for backwards compatibility [DEPRECATED]
-    #[structopt(short = "p", long = "passphrase")]
-    pub passphrase_needed: bool,
+    #[arg(short = 'p', long = "passphrase")]
+    passphrase_needed: bool,
 
     /// Specify if your private SSH key is located in another location than $HOME/.ssh/id_rsa
-    #[structopt(short = "k", long = "private_key_path")]
-    pub private_key_path: Option<PathBuf>,
+    #[arg(short = 'k', long = "private_key_path")]
+    private_key_path: Option<PathBuf>,
 
     /// Supply parameters via the command line in <name>=<value> format
-    #[structopt(long = "param")]
-    pub parameters: Vec<String>,
+    #[arg(long = "param")]
+    parameters: Vec<String>,
 }
 
-#[buildstructor::buildstructor]
 impl Opts {
-    #[builder]
-    #[allow(clippy::too_many_arguments)]
-    #[allow(dead_code)]
-    pub fn new(
-        template_path: PathBuf,
-        repository_template_path: Option<PathBuf>,
-        git_ref: Option<String>,
-        project_name: Option<String>,
-        target_dir: Option<PathBuf>,
-        force: Option<bool>,
-        append: Option<bool>,
-        private_key_path: Option<PathBuf>,
-        parameters: Vec<String>,
-    ) -> Opts {
-        Self {
-            template_path,
-            repository_template_path,
-            git_ref,
-            project_name,
-            target_dir,
-            force: force.unwrap_or_default(),
-            append: append.unwrap_or_default(),
-            passphrase_needed: false,
-            private_key_path,
-            parameters,
-        }
+    /// Builder function for the `Opts` structure
+    pub fn builder<T: Into<PathBuf>>(template_path: T) -> Self {
+        Self::default().template_path(template_path)
+    }
+
+    /// Set the template path for the structure.
+    pub fn template_path<T: Into<PathBuf>>(mut self, path: T) -> Self {
+        let _ = std::mem::replace(&mut self.template_path, path.into());
+        self
+    }
+
+    /// Set the template path inside the repository
+    pub fn repository_template_path<T: Into<PathBuf>>(mut self, path: T) -> Self {
+        let _ = self.repository_template_path.replace(path.into());
+        self
+    }
+
+    /// Set the git reference
+    pub fn git_ref<T: Into<String>>(mut self, gitref: T) -> Self {
+        let _ = self.git_ref.replace(gitref.into());
+        self
+    }
+
+    /// Set the project name
+    pub fn project_name<T: Into<String>>(mut self, name: T) -> Self {
+        let _ = self.project_name.replace(name.into());
+        self
+    }
+
+    /// Set the target directory
+    pub fn target_dir<T: Into<PathBuf>>(mut self, target_dir: T) -> Self {
+        let _ = self.target_dir.replace(target_dir.into());
+        self
+    }
+
+    /// Force generating to the target directory if exists
+    pub fn force(mut self, force: bool) -> Self {
+        self.force = force;
+        self
+    }
+
+    /// Append generating to the target directory if exists
+    pub fn append(mut self, append: bool) -> Self {
+        self.append = append;
+        self
+    }
+
+    /// Is Passphrase needed (prompt user)
+    pub fn passphrase_needed(mut self, needed: bool) -> Self {
+        self.passphrase_needed = needed;
+        self
+    }
+
+    /// Set the private key path
+    pub fn private_key_path<T: Into<PathBuf>>(mut self, private_key_path: T) -> Self {
+        let _ = self.private_key_path.replace(private_key_path.into());
+        self
+    }
+
+    /// Set the parameters (supplied as `vec!["key1=value1", "key2=value2"]`).
+    pub fn parameters<T: Into<String>>(mut self, params: Vec<T>) -> Self {
+        let _ = std::mem::replace(
+            &mut self.parameters,
+            params
+                .into_iter()
+                .map(|x| x.into())
+                .collect::<Vec<String>>(),
+        );
+        self
     }
 }
 
@@ -651,7 +725,7 @@ impl Parameter {
 mod tests {
     use crate::{render_path, BTreeMap, Handlebars};
 
-    use super::ScaffoldDescription;
+    use super::{Opts, ScaffoldDescription};
     use std::fs::{remove_file, File};
     use std::io::Write;
     use std::path::Path;
@@ -749,5 +823,70 @@ mod tests {
         // uncomment to see output of script execution
         // std::io::stdout().write_all(&_output.stdout).unwrap();
         remove_file(&script_name).unwrap();
+    }
+
+    #[test]
+    fn test_build_opts_works() {
+        let opts = Opts::builder("/path/to/template");
+        assert_eq!(
+            opts.template_path,
+            std::path::PathBuf::from("/path/to/template")
+        );
+
+        // Test projct name can be set
+        assert!(opts.project_name.is_none());
+        let opts = opts.project_name("project");
+        assert_eq!(opts.project_name, Some("project".to_string()));
+
+        // Test template can be set
+        assert_eq!(
+            opts.template_path,
+            std::path::PathBuf::from("/path/to/template")
+        );
+        let opts = opts.template_path("/path/to/new-template");
+        assert_eq!(
+            opts.template_path,
+            std::path::PathBuf::from("/path/to/new-template")
+        );
+
+        // Test repository template path can be set.
+        assert!(opts.repository_template_path.is_none());
+        let opts = opts.repository_template_path("somepath");
+        assert_eq!(
+            opts.repository_template_path,
+            Some(std::path::PathBuf::from("somepath"))
+        );
+
+        // Test git_ref can be set
+        assert!(opts.git_ref.is_none());
+        let opts = opts.git_ref("main");
+        assert_eq!(opts.git_ref, Some("main".to_string()));
+
+        // Test target_dir
+        assert!(opts.target_dir.is_none());
+        let opts = opts.target_dir("target");
+        assert_eq!(opts.target_dir, Some(std::path::PathBuf::from("target")));
+
+        // Test append, force, passphrase_needed
+        assert!(!opts.append);
+        assert!(!opts.force);
+        assert!(!opts.passphrase_needed);
+        let opts = opts.append(true).force(true).passphrase_needed(true);
+        assert!(opts.append);
+        assert!(opts.force);
+        assert!(opts.passphrase_needed);
+
+        // Test private_key_path can be set
+        assert!(opts.private_key_path.is_none());
+        let opts = opts.private_key_path(".ssh/id_rsa");
+        assert_eq!(
+            opts.private_key_path,
+            Some(std::path::PathBuf::from(".ssh/id_rsa"))
+        );
+
+        // Test parameters can be set
+        assert!(opts.parameters.is_empty());
+        let opts = opts.parameters(vec!["key1=value1"]);
+        assert_eq!(opts.parameters, vec!["key1=value1".to_string()]);
     }
 }
