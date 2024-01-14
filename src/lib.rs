@@ -486,7 +486,7 @@ impl ScaffoldDescription {
                     continue;
                 }
 
-                let entry_path = render_path(&template_engine, &entry_path, &parameters)?;
+                let entry_path = render_path(&template_engine, entry_path, &parameters)?;
 
                 let dir_path_to_create = dir_path.join(&entry_path);
                 if dir_path_to_create.exists() && self.force {
@@ -590,7 +590,7 @@ impl ScaffoldDescription {
     fn run_hooks(&self, project_path: &Path, commands: &[String]) -> Result<()> {
         let initial_path = std::env::current_dir()?;
         // move to project directory
-        std::env::set_current_dir(&project_path).map_err(|e| {
+        std::env::set_current_dir(project_path).map_err(|e| {
             anyhow!(
                 "cannot change directory to project path {:?}: {}",
                 &project_path,
@@ -812,7 +812,7 @@ mod tests {
             file.write_all(b"#!/bin/bash\nls .\nfree").unwrap();
             Command::new("chmod")
                 .arg("+x")
-                .arg(&script_name)
+                .arg(script_name)
                 .output()
                 .expect("can't set execute perm on script file");
         }
@@ -822,7 +822,7 @@ mod tests {
         child.wait().expect("failed to wait on child process");
         // uncomment to see output of script execution
         // std::io::stdout().write_all(&_output.stdout).unwrap();
-        remove_file(&script_name).unwrap();
+        remove_file(script_name).unwrap();
     }
 
     #[test]
