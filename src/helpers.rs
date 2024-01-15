@@ -1,11 +1,9 @@
 use handlebars::{
     to_json, BlockContext, Context, Handlebars, Helper, HelperDef, HelperResult, JsonValue, Output,
-    PathAndJson, RenderContext, RenderError, Renderable,
+    PathAndJson, RenderContext, RenderError, RenderErrorReason, Renderable,
 };
 
-pub(crate) fn create_block<'reg: 'rc, 'rc>(
-    param: &'rc PathAndJson<'reg, 'rc>,
-) -> BlockContext<'reg> {
+pub(crate) fn create_block<'reg: 'rc, 'rc>(param: &'rc PathAndJson<'rc>) -> BlockContext<'reg> {
     let mut block = BlockContext::new();
 
     if let Some(new_path) = param.context_path() {
@@ -24,7 +22,7 @@ pub struct ForRangHelper;
 impl HelperDef for ForRangHelper {
     fn call<'reg: 'rc, 'rc>(
         &self,
-        h: &Helper<'reg, 'rc>,
+        h: &Helper<'rc>,
         r: &'reg Handlebars<'reg>,
         ctx: &'rc Context,
         rc: &mut RenderContext<'reg, 'rc>,
@@ -32,7 +30,7 @@ impl HelperDef for ForRangHelper {
     ) -> HelperResult {
         let value = h
             .param(0)
-            .ok_or_else(|| RenderError::new("Param not found for helper \"forRange\""))?;
+            .ok_or_else(|| RenderErrorReason::ParamNotFoundForIndex("forRange", 0))?;
 
         let template = h.template();
         match template {
@@ -43,7 +41,7 @@ impl HelperDef for ForRangHelper {
 
                     let number = number
                         .as_u64()
-                        .ok_or_else(|| RenderError::new("bad u64 conversion"))?;
+                        .ok_or_else(|| RenderErrorReason::Other("bad u64 conversion".into()))?;
                     for i in 0..number {
                         if let Some(ref mut block) = rc.block_mut() {
                             let is_first = i == 0u64;
