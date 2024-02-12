@@ -1,6 +1,6 @@
 [package]
 name = "cargo-scaffold"
-version = "0.10.0"
+version = "0.11.0"
 authors = ["Benjamin Coenen <5719034+bnjjj@users.noreply.github.com>"]
 edition = "2021"
 description = "Scaffold and generate an entire stack using a simple toml config file and 'handlebars' templates."
@@ -18,7 +18,7 @@ dialoguer = "0.11"
 handlebars = "5.0"
 walkdir = "2.4"
 toml = "0.8"
-git2 = { version = "0.17", features = ["vendored-openssl"] }
+git2 = { version = "0.18", features = ["vendored-openssl"] }
 md5 = "0.7"
 handlebars_misc_helpers = { version = "0.15", default-features = false, features = ["string", "http_attohttpc", "json"], optional = true }
 indicatif = "0.17"
