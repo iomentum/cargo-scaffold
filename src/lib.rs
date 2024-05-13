@@ -424,6 +424,12 @@ impl ScaffoldDescription {
             Value::String(dir_path.to_str().unwrap_or_default().to_string()),
         );
 
+        let mut template_engine = Handlebars::new();
+        template_engine.set_strict_mode(false);
+        #[cfg(feature = "helpers")]
+        handlebars_misc_helpers::setup_handlebars(&mut template_engine);
+        template_engine.register_helper("forRange", Box::new(ForRangHelper));
+
         // pre-hooks
         if let Some(Hooks {
             pre: Some(commands),
@@ -437,8 +443,14 @@ impl ScaffoldDescription {
                     Emoji("🤖", ""),
                     cyan.apply_to("Triggering pre-hooks…"),
                 );
-                self.run_hooks(&dir_path, commands)?;
             }
+            let commands = commands
+                .iter()
+                .map(|c| template_engine.render_template(c, &parameters).ok())
+                .map(|v| v.unwrap())
+                .collect::<Vec<String>>();
+
+            self.run_hooks(&dir_path, &commands)?;
         }
 
         // List entries inside directory
@@ -465,12 +477,6 @@ impl ScaffoldDescription {
                         .unwrap_or_else(|_| entry.path()),
                 )
             });
-
-        let mut template_engine = Handlebars::new();
-        template_engine.set_strict_mode(false);
-        #[cfg(feature = "helpers")]
-        handlebars_misc_helpers::setup_handlebars(&mut template_engine);
-        template_engine.register_helper("forRange", Box::new(ForRangHelper));
 
         let cyan = Style::new().cyan();
         println!("{} {}", Emoji("🔄", ""), cyan.apply_to("Templating files…"),);
@@ -580,7 +586,13 @@ impl ScaffoldDescription {
                     Emoji("🤖", ""),
                     cyan.apply_to("Triggering post-hooks…"),
                 );
-                self.run_hooks(&dir_path, commands)?;
+                let commands = commands
+                    .iter()
+                    .map(|c| template_engine.render_template(c, &parameters).ok())
+                    .map(|v| v.unwrap())
+                    .collect::<Vec<String>>();
+
+                self.run_hooks(&dir_path, &commands)?;
             }
         }
 
