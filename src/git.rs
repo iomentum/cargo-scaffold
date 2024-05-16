@@ -34,6 +34,9 @@ pub(crate) fn clone(
         fetch_options.download_tags(git2::AutotagOption::All);
     }
 
+    // we don't need to download the entire history
+    fetch_options.depth(1);
+
     // Prepare builder.
     let mut builder = git2::build::RepoBuilder::new();
     builder.fetch_options(fetch_options);
