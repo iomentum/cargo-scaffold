@@ -1,6 +1,6 @@
 [package]
 name = "cargo-scaffold"
-version = "0.14.0"
+version = "0.15.0"
 authors = ["Benjamin Coenen <5719034+bnjjj@users.noreply.github.com>"]
 edition = "2021"
 description = "Scaffold and generate an entire stack using a simple toml config file and 'handlebars' templates."
