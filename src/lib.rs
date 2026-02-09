@@ -3,7 +3,6 @@ mod git;
 mod helpers;
 
 use std::{
-    collections::BTreeMap,
     env,
     fs::{self, File},
     io::{Read, Write},
@@ -20,6 +19,7 @@ use fs::OpenOptions;
 use globset::{Glob, GlobSetBuilder};
 use handlebars::Handlebars;
 use helpers::ForRangHelper;
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use walkdir::WalkDir;
 
@@ -30,7 +30,7 @@ pub const SCAFFOLD_FILENAME: &str = ".scaffold.toml";
 pub struct ScaffoldDescription {
     template: TemplateDescription,
     #[serde(default)]
-    parameters: BTreeMap<String, Parameter>,
+    parameters: IndexMap<String, Parameter>,
     hooks: Option<Hooks>,
     #[serde(skip)]
     target_dir: Option<PathBuf>,
@@ -43,7 +43,7 @@ pub struct ScaffoldDescription {
     #[serde(skip)]
     project_name: Option<String>,
     #[serde(skip)]
-    default_parameters: BTreeMap<String, Value>,
+    default_parameters: IndexMap<String, Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -238,7 +238,7 @@ impl Opts {
 
 impl ScaffoldDescription {
     pub fn new(opts: Opts) -> Result<Self> {
-        let mut default_parameters = BTreeMap::new();
+        let mut default_parameters = IndexMap::new();
         for param in opts.parameters {
             let split = param.splitn(2, '=').collect::<Vec<_>>();
             if split.len() != 2 {
@@ -341,10 +341,10 @@ impl ScaffoldDescription {
     }
 
     /// Launch prompt to the user to ask for different parameters
-    pub fn fetch_parameters_value(&self) -> Result<BTreeMap<String, Value>> {
-        use std::collections::btree_map::Entry;
+    pub fn fetch_parameters_value(&self) -> Result<IndexMap<String, Value>> {
+        use indexmap::map::Entry;
 
-        let mut parameters: BTreeMap<String, Value> = self.default_parameters.clone();
+        let mut parameters: IndexMap<String, Value> = self.default_parameters.clone();
         for (parameter_name, parameter) in &self.parameters {
             if let Entry::Vacant(entry) = parameters.entry(parameter_name.clone()) {
                 entry.insert(parameter.to_value_interactive()?);
@@ -376,7 +376,7 @@ impl ScaffoldDescription {
 
     /// Scaffold the project with the given parameters defined in the .scaffold.toml without prompting any inputs
     /// It's a non-interactive mode
-    pub fn scaffold_with_parameters(&self, mut parameters: BTreeMap<String, Value>) -> Result<()> {
+    pub fn scaffold_with_parameters(&self, mut parameters: IndexMap<String, Value>) -> Result<()> {
         let mut default_parameters = self.default_parameters.clone();
         if let Some(name) = &self.project_name {
             parameters.insert("name".to_string(), Value::String(name.clone()));
@@ -388,7 +388,7 @@ impl ScaffoldDescription {
         self.internal_scaffold(default_parameters)
     }
 
-    fn internal_scaffold(&self, mut parameters: BTreeMap<String, Value>) -> Result<()> {
+    fn internal_scaffold(&self, mut parameters: IndexMap<String, Value>) -> Result<()> {
         let excludes = match &self.template.exclude {
             Some(exclude) => {
                 let mut builder = GlobSetBuilder::new();
@@ -650,7 +650,7 @@ impl ScaffoldDescription {
 fn render_path(
     template_engine: &Handlebars,
     path: &Path,
-    parameters: &BTreeMap<String, Value>,
+    parameters: &IndexMap<String, Value>,
 ) -> Result<PathBuf> {
     // The backslash character used as path separator on windows is an escape character for handlebars.
     // Avoid passing it to the template renderer by expanding each path component individually.
@@ -735,7 +735,8 @@ impl Parameter {
 
 #[cfg(test)]
 mod tests {
-    use crate::{render_path, BTreeMap, Handlebars};
+    use crate::{render_path, Handlebars};
+    use indexmap::IndexMap;
 
     use super::{Opts, ScaffoldDescription};
     use std::fs::{remove_file, File};
@@ -750,7 +751,7 @@ mod tests {
         // This is us making sure we don't regress with the interpolation
         let template_engine = Handlebars::new();
 
-        let mut parameters = BTreeMap::new();
+        let mut parameters = IndexMap::new();
         parameters.insert("snake_name".to_string(), "tracing".to_string().into());
 
         let path = Path::new(
@@ -768,7 +769,7 @@ mod tests {
         // This is us making sure we don't regress with the interpolation
         let template_engine = Handlebars::new();
 
-        let mut parameters = BTreeMap::new();
+        let mut parameters = IndexMap::new();
         parameters.insert("snake_name".to_string(), "tracing".to_string().into());
 
         let path = Path::new("/tmp/router_scaffoldXwTZ11/src/plugins/{{snake_name}}.rs");
@@ -787,7 +788,7 @@ mod tests {
         // This is us making sure we don't regress with the interpolation
         let template_engine = Handlebars::new();
 
-        let mut parameters = BTreeMap::new();
+        let mut parameters = IndexMap::new();
         parameters.insert("snake_name".to_string(), "tracing".to_string().into());
         parameters.insert("directory_name".to_string(), "example".to_string().into());
 
